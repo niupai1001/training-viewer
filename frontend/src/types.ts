@@ -309,6 +309,8 @@ export interface HyperparameterRow {
 
 export interface CompareResult {
   axis: AxisRequest;
+  x_min?: number | null;
+  x_max?: number | null;
   run_ids: string[];
   series: CompareSeries[];
   runs: CompareRunInfo[];
@@ -517,4 +519,6 @@ export interface CompareRequest {
   series: string[];
   axis: AxisRequest;
   max_points?: number;
+  x_min?: number;
+  x_max?: number;
 }

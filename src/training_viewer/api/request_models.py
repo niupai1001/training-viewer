@@ -36,6 +36,8 @@ class CompareRequest(BaseModel):
     series: list[str] = Field(default_factory=list, max_length=50)
     axis: Literal["global_step", "epoch", "timestamp", "auto"] = "auto"
     max_points: int = Field(default=1500, ge=10, le=20000)
+    x_min: float | None = None
+    x_max: float | None = None
 
 
 class ExportRequest(CompareRequest):

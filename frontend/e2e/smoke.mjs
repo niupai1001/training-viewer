@@ -33,6 +33,15 @@ async function assertViewport(width, height, suffix) {
     fullPage: true,
   });
 
+  const chartBox = await page.locator(".metric-chart-canvas").first().boundingBox();
+  if (chartBox) {
+    await page.mouse.move(chartBox.x + chartBox.width / 2, chartBox.y + chartBox.height / 2);
+    await page.mouse.wheel(0, -600);
+    await page.getByText(/当前只查询/).waitFor({ timeout: 10000 });
+    await page.getByRole("button", { name: "重置区间" }).click();
+    await page.getByText(/当前只查询/).waitFor({ state: "hidden", timeout: 10000 });
+  }
+
   const items = page.locator(".run-selector-item");
   const count = Math.min(await items.count(), 2);
   for (let index = 0; index < count; index += 1) {

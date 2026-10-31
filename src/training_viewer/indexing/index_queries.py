@@ -1053,9 +1053,13 @@ class IndexQueries:
         series_keys: list[str],
         axis: str = "auto",
         max_points: int = 1500,
+        x_min: float | None = None,
+        x_max: float | None = None,
     ) -> dict:
         if axis not in AXIS_REQUESTS:
             raise ValueError(f"不支持的横轴：{axis}")
+        if x_min is not None and x_max is not None and x_min > x_max:
+            raise ValueError("x_min 不能大于 x_max")
         run_ids = list(dict.fromkeys(run_ids))
         if not run_ids:
             return {
@@ -1103,13 +1107,22 @@ class IndexQueries:
             for key in requested:
                 series_results.append(
                     self._compare_series(
-                        connection, run_rows, metric_maps, key, axis, max_points
+                        connection,
+                        run_rows,
+                        metric_maps,
+                        key,
+                        axis,
+                        max_points,
+                        x_min,
+                        x_max,
                     )
                 )
             hyperparameters = self._hyperparameter_comparison(run_rows)
             run_fields = self._run_field_comparison(run_rows)
         return {
             "axis": axis,
+            "x_min": x_min,
+            "x_max": x_max,
             "run_ids": [row["run_id"] for row in run_rows],
             "series": series_results,
             "runs": [
@@ -1139,6 +1152,8 @@ class IndexQueries:
         key: str,
         axis: str,
         max_points: int,
+        x_min: float | None = None,
+        x_max: float | None = None,
     ) -> dict:
         matches = {
             row["run_id"]: self._match_metric_key(metric_maps[row["run_id"]], key)
@@ -1179,7 +1194,13 @@ class IndexQueries:
                 continue
             base_metric = base_metric or match
             payload = self._series_payload(
-                connection, row["run_id"], match, resolved_axis, max_points
+                connection,
+                row["run_id"],
+                match,
+                resolved_axis,
+                max_points,
+                x_min,
+                x_max,
             )
             if not payload["points"]:
                 warnings.append(

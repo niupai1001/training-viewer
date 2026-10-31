@@ -4,7 +4,7 @@ import { useApi } from "../hooks/useApi";
 import { useLiveVersion } from "../live/LiveUpdates";
 import { useRoute } from "../navigation/route";
 import type { CompareResult, MetricKey, RunDetail, RunSummary } from "../types";
-import { formatDateTime, formatRelativeTime, unitLabel } from "../utils/format";
+import { formatDateTime, formatNumber, formatRelativeTime, unitLabel } from "../utils/format";
 import {
   EmptyState,
   ErrorBlock,
@@ -271,6 +271,18 @@ function WorkspaceComparison({
       ),
     [keysState.data],
   );
+  const [range, setRange] = useState<{ min: number; max: number } | null>(null);
+  function updateRange(next: { min: number; max: number } | null) {
+    setRange((current) => {
+      if (!next) {
+        return null;
+      }
+      if (current && Math.abs(current.min - next.min) < 1e-9 && Math.abs(current.max - next.max) < 1e-9) {
+        return current;
+      }
+      return next;
+    });
+  }
   const compareState = useApi<CompareResult | null>(
     () =>
       seriesKeys.length > 0
@@ -279,9 +291,11 @@ function WorkspaceComparison({
             series: seriesKeys,
             axis: "auto",
             max_points: 1500,
+            x_min: range?.min,
+            x_max: range?.max,
           })
         : Promise.resolve(null),
-    [selectedIds.join(","), seriesKeys.join("|"), liveVersion],
+    [selectedIds.join(","), seriesKeys.join("|"), range?.min, range?.max, liveVersion],
   );
   return (
     <>
@@ -309,6 +323,14 @@ function WorkspaceComparison({
               {compareState.data.warnings.map((warning) => <div key={warning.code}>{warning.message}</div>)}
             </div>
           ) : null}
+          {range ? (
+            <p className="chart-note">
+              当前只查询 {formatNumber(range.min, 2)} – {formatNumber(range.max, 2)} 区间。
+              <button type="button" className="link-button" onClick={() => setRange(null)}>
+                重置区间
+              </button>
+            </p>
+          ) : null}
           <div className="chart-stack">
             {compareState.data.series.map((series) => (
               <MetricChart
@@ -328,6 +350,7 @@ function WorkspaceComparison({
                 showRaw={false}
                 group="workspace-comparison"
                 downsampled={series.runs.some((run) => run.downsampled)}
+                onRangeChange={updateRange}
                 emptyMessage="所选运行在该横轴上没有共同记录。"
               />
             ))}

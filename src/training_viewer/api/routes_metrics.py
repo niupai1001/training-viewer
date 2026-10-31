@@ -60,7 +60,12 @@ def compare_query(
     _validate_axis(payload.axis)
     try:
         return service.queries.compare(
-            payload.run_ids, payload.series, payload.axis, payload.max_points
+            payload.run_ids,
+            payload.series,
+            payload.axis,
+            payload.max_points,
+            payload.x_min,
+            payload.x_max,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
