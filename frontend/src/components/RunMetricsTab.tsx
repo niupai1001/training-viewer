@@ -25,6 +25,23 @@ export function RunMetricsTab({ run, chartLimit }: { run: RunDetail; chartLimit?
   const [phaseFilter, setPhaseFilter] = useState<string>("all");
   const [preferences, setPreferences] = useState<ChartPreferences>(DEFAULT_CHART_PREFERENCES);
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
+  const [range, setRange] = useState<{ min: number; max: number } | null>(null);
+
+  function updateRange(next: { min: number; max: number } | null) {
+    setRange((current) => {
+      if (!next) {
+        return null;
+      }
+      if (current && Math.abs(current.min - next.min) < 1e-9 && Math.abs(current.max - next.max) < 1e-9) {
+        return current;
+      }
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    setRange(null);
+  }, [run.run_id, preferences.axis]);
 
   const metricSignature = run.metric_keys.map((metric) => metric.key).join("|");
   const phases = useMemo(
@@ -49,11 +66,20 @@ export function RunMetricsTab({ run, chartLimit }: { run: RunDetail; chartLimit?
     () =>
       selectedKeys.length === 0
         ? Promise.resolve(null)
-        : api.metrics(run.run_id, selectedKeys, preferences.axis, 3000),
+        : api.metrics(
+            run.run_id,
+            selectedKeys,
+            preferences.axis,
+            3000,
+            range?.min,
+            range?.max,
+          ),
     [
       run.run_id,
       selectedKeys.join("|"),
       preferences.axis,
+      range?.min,
+      range?.max,
       run.status === "running" ? liveVersion : 0,
     ],
   );
@@ -185,6 +211,14 @@ export function RunMetricsTab({ run, chartLimit }: { run: RunDetail; chartLimit?
       </div>
 
       <ChartControls value={preferences} onChange={setPreferences} />
+      {range ? (
+        <p className="chart-note">
+          当前只查询 {formatNumber(range.min, 2)} – {formatNumber(range.max, 2)} 区间。
+          <button type="button" className="link-button" onClick={() => setRange(null)}>
+            重置区间
+          </button>
+        </p>
+      ) : null}
 
       {metricsState.loading ? <LoadingBlock label="正在读取指标…" /> : null}
       {metricsState.error ? (
@@ -229,6 +263,7 @@ export function RunMetricsTab({ run, chartLimit }: { run: RunDetail; chartLimit?
             showRaw={preferences.showRaw}
             group="run-detail"
             downsampled={series.downsampled}
+            onRangeChange={updateRange}
             emptyMessage={`指标 ${series.key} 在${axisShortLabel(series.axis)}横轴上没有可用记录。`}
           />
         ))}

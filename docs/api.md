@@ -62,7 +62,7 @@
 
 `axis` 可为 `global_step`、`epoch`、`timestamp`、`auto`（默认）。`auto` 按每个指标真实存在的字段选择：优先 `global_step`，否则 `epoch`，否则 `timestamp`；不会伪造 Step。时间轴返回 Unix 秒，前端按浏览器本地时区显示。响应中每个 series 带自己的 `axis`。
 
-`x_min` / `x_max` 可选，按当前轴的单位限制查询区间；时间轴用 Unix 秒。区间查询仍返回该区间内的 `total_points`，不会伪造区间外的点。当前前端尚未把 ECharts 缩放事件接到该参数，API 已就绪。
+`x_min` / `x_max` 可选，按当前轴的单位限制查询区间；时间轴用 Unix 秒。区间查询仍返回该区间内的 `total_points`，不会伪造区间外的点。运行详情图表已把 ECharts `dataZoom` 事件接到该参数；缩放后按区间重查，并显示“当前只查询 … 区间 / 重置区间”。
 
 ### 曲线响应要点
 

@@ -47,7 +47,7 @@
 3. 平滑开启且“显示原始曲线”时，额外绘制低透明度原始线，并在 tooltip 中忽略原始线。
 4. 计算是否存在非正值；对数轴请求但存在非正值时改用线性轴并显示提示。
 5. 构建 ECharts 配置：数值轴、图例、轴提示、inside + slider 数据缩放、最小/最大分桶后的数据。
-6. 图表容器**始终渲染**（空数据用覆盖层），挂载时 `echarts.init`，用 `ResizeObserver` 跟随容器宽度；同组图表 `echarts.connect(group)`。这样数据从空变为非空时不需要重新挂载初始化。
+6. 图表容器**始终渲染**（空数据用覆盖层），挂载时 `echarts.init`，用 `ResizeObserver` 跟随容器宽度；同组图表 `echarts.connect(group)`。这样数据从空变为非空时不需要重新挂载初始化。传入 `onRangeChange` 时监听 `datazoom`，把当前 `startValue/endValue`（或 start/end 百分比换算）交给页面做 `x_min/x_max` 区间重查。
 7. 导出：
    - PNG：Canvas `getDataURL`，2 倍像素比；
    - SVG：临时 SVG 渲染实例生成字符串，Blob 下载。

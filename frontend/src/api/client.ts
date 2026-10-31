@@ -117,9 +117,22 @@ export const api = {
     request<{ run_id: string; metric_keys: MetricKey[] }>(
       `/runs/${encodeURIComponent(runId)}/metric-keys`,
     ),
-  metrics: (runId: string, series: string[], axis: AxisRequest, maxPoints = 2000) =>
+  metrics: (
+    runId: string,
+    series: string[],
+    axis: AxisRequest,
+    maxPoints = 2000,
+    xMin?: number,
+    xMax?: number,
+  ) =>
     request<MetricQueryResult>(
-      `/runs/${encodeURIComponent(runId)}/metrics${queryString({ series, axis, max_points: maxPoints })}`,
+      `/runs/${encodeURIComponent(runId)}/metrics${queryString({
+        series,
+        axis,
+        max_points: maxPoints,
+        x_min: xMin,
+        x_max: xMax,
+      })}`,
     ),
   compare: (payload: CompareRequest) =>
     request<CompareResult>("/compare/query", {

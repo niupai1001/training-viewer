@@ -46,6 +46,7 @@ interface MetricChartProps {
   group?: string;
   emptyMessage?: string;
   downsampled?: boolean;
+  onRangeChange?: (range: { min: number; max: number } | null) => void;
 }
 
 type TooltipParameter = {
@@ -67,10 +68,13 @@ export function MetricChart({
   group,
   emptyMessage = "当前没有可绘制的数据点。",
   downsampled = false,
+  onRangeChange,
 }: MetricChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<ReturnType<typeof echarts.init> | null>(null);
   const optionRef = useRef<EChartsCoreOption | null>(null);
+  const rangeCallbackRef = useRef(onRangeChange);
+  rangeCallbackRef.current = onRangeChange;
 
   const built = useMemo(
     () => buildChartOption({ lines, axis, smoothing, smoothingWindow, logScale, showRaw }),
@@ -89,7 +93,43 @@ export function MetricChart({
     }
     const observer = new ResizeObserver(() => chart.resize());
     observer.observe(containerRef.current);
+    const zoomHandler = () => {
+      const callback = rangeCallbackRef.current;
+      if (!callback) {
+        return;
+      }
+      const option = chart.getOption() as {
+        dataZoom?: {
+          startValue?: number;
+          endValue?: number;
+          start?: number;
+          end?: number;
+        }[];
+        series?: { data?: { value?: [number, number] }[] }[];
+      };
+      const dataZoom = option.dataZoom?.[0];
+      let min = dataZoom?.startValue;
+      let max = dataZoom?.endValue;
+      if (typeof min !== "number" || typeof max !== "number") {
+        const xs = (option.series ?? [])
+          .flatMap((series) => series.data ?? [])
+          .map((item) => item.value?.[0])
+          .filter((value): value is number => typeof value === "number");
+        const start = dataZoom?.start;
+        const end = dataZoom?.end;
+        if (xs.length === 0 || typeof start !== "number" || typeof end !== "number") {
+          return;
+        }
+        const dataMin = Math.min(...xs);
+        const dataMax = Math.max(...xs);
+        min = dataMin + ((dataMax - dataMin) * start) / 100;
+        max = dataMin + ((dataMax - dataMin) * end) / 100;
+      }
+      callback({ min, max });
+    };
+    chart.on("datazoom", zoomHandler);
     return () => {
+      chart.off("datazoom", zoomHandler);
       observer.disconnect();
       chart.dispose();
       chartRef.current = null;

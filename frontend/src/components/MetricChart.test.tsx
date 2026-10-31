@@ -8,6 +8,9 @@ const { chartMock } = vi.hoisted(() => ({
     setOption: vi.fn(),
     resize: vi.fn(),
     dispose: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
+    getOption: vi.fn(() => ({ dataZoom: [{ start: 0, end: 100 }], series: [] })),
     getDataURL: vi.fn(() => "data:image/png;base64,stub"),
     group: "",
   },
@@ -47,6 +50,8 @@ describe("MetricChart lifecycle", () => {
   beforeEach(() => {
     chartMock.setOption.mockClear();
     chartMock.dispose.mockClear();
+    chartMock.on.mockClear();
+    chartMock.off.mockClear();
   });
 
   it("keeps the chart container mounted when data is empty and later receives points", () => {
@@ -87,5 +92,33 @@ describe("MetricChart lifecycle", () => {
     };
     expect(lastOption.series?.length).toBe(2);
     expect(lastOption.series?.[1]?.name).toContain("会话 2");
+  });
+
+  it("reports a dataZoom range for server-side window queries", () => {
+    const onRangeChange = vi.fn();
+    render(
+      <MetricChart
+        title="val/loss"
+        lines={[{ id: "val/loss", label: "val/loss", points: [point], unit: "none" }]}
+        axis="global_step"
+        smoothing="none"
+        smoothingWindow={5}
+        logScale={false}
+        showRaw={false}
+        onRangeChange={onRangeChange}
+      />,
+    );
+    const handler = chartMock.on.mock.calls
+      .filter(([event]) => event === "datazoom")
+      .at(-1)?.[1] as (() => void) | undefined;
+    expect(handler).toBeTypeOf("function");
+    (chartMock.getOption as unknown as {
+      mockReturnValueOnce: (value: unknown) => void;
+    }).mockReturnValueOnce({
+      dataZoom: [{ startValue: 10, endValue: 30 }],
+      series: [],
+    });
+    handler?.();
+    expect(onRangeChange).toHaveBeenCalledWith({ min: 10, max: 30 });
   });
 });
