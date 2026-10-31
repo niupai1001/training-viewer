@@ -303,7 +303,7 @@ npm run build
 - TensorBoard image 事件会缓存为结果图片；多光谱/GeoTIFF 波段合成、掩膜色盘尚未实现，不能默认加载全量栅格。
 - Python 来源插件支持 manifest/状态/失败隔离；前端产物插件仍是编译期内建，不支持动态安装。
 - CUDA `0xC0000005` 未在用户机器复现；writer 已默认无后台心跳线程并提供隔离矩阵脚本，但不能宣称根因已修复。
-- 本版本只在 Windows 实机复验；macOS/Linux 的目录选择框、watchdog 与路径差异未独立验证。
+- 本版本只在 Windows 实机复验；已添加 Ubuntu/Windows/macOS CI 矩阵，但尚未在本次环境实际运行，macOS/Linux 的目录选择框、watchdog 与路径差异仍未独立确认。
 - 没有用户的 62 个真实来源，未生成真实来源清单与 53→62 解释；工具为 `tools/export_source_inventory.py`。
 - 训练环境与查看器环境默认分离：`attach` 在查看器所在机器执行；跨机器场景只完成日志写入，由本机挂载或 SSH 隧道访问。
 

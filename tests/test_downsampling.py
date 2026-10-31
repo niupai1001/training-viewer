@@ -54,3 +54,9 @@ def test_downsampling_preserves_extremes_and_uses_raw_best_last(viewer) -> None:
         ).fetchone()
     assert row[0] > 0
     assert row[1] == 5000
+
+    ranged = service.queries.query_series(
+        "run-0001", ["train/loss"], "global_step", 200, x_min=1000, x_max=2000
+    )["series"][0]
+    assert ranged["total_points"] == 1001
+    assert all(1000 <= point["x"] <= 2000 for point in ranged["points"])

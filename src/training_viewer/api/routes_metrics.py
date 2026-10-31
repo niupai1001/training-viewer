@@ -36,11 +36,15 @@ def query_metrics(
     series: list[str] = Query(default=[]),
     axis: str = Query(default="auto"),
     max_points: int = Query(default=2000, ge=10, le=20000),
+    x_min: float | None = Query(default=None),
+    x_max: float | None = Query(default=None),
     service: TrainingViewerService = Depends(get_service),
 ) -> dict:
     _validate_axis(axis)
     try:
-        result = service.queries.query_series(run_id, series, axis, max_points)
+        result = service.queries.query_series(
+            run_id, series, axis, max_points, x_min, x_max
+        )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     if not result["series"] and not result["warnings"]:

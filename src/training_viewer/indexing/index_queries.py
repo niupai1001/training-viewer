@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from ..indexing.database import IndexDatabase
-from ..log_readers.base import epoch_seconds_from_iso
+from ..log_readers.base import epoch_seconds_from_iso, format_timestamp
 
 VALID_AXES = ("global_step", "epoch", "timestamp")
 AXIS_REQUESTS = (*VALID_AXES, "auto")
@@ -713,9 +713,13 @@ class IndexQueries:
         series_keys: list[str],
         axis: str = "auto",
         max_points: int = 2000,
+        x_min: float | None = None,
+        x_max: float | None = None,
     ) -> dict:
         if axis not in AXIS_REQUESTS:
             raise ValueError(f"不支持的横轴：{axis}")
+        if x_min is not None and x_max is not None and x_min > x_max:
+            raise ValueError("x_min 不能大于 x_max")
         max_points = max(10, min(int(max_points), 20000))
         with self.database.connection() as connection:
             run_row = connection.execute(
@@ -741,7 +745,13 @@ class IndexQueries:
                 resolved_axis = self._resolve_axis(match, axis)
                 series.append(
                     self._series_payload(
-                        connection, run_id, match, resolved_axis, max_points
+                        connection,
+                        run_id,
+                        match,
+                        resolved_axis,
+                        max_points,
+                        x_min,
+                        x_max,
                     )
                 )
             if not series and not warnings:
@@ -795,15 +805,22 @@ class IndexQueries:
         return None
 
     def _series_payload(
-        self, connection, run_id: str, metric: dict, axis: str, max_points: int
+        self,
+        connection,
+        run_id: str,
+        metric: dict,
+        axis: str,
+        max_points: int,
+        x_min: float | None = None,
+        x_max: float | None = None,
     ) -> dict:
         phase, metric_name = metric["phase"], metric["metric_name"]
-        cache_key = (run_id, phase, metric_name, axis, max_points)
+        cache_key = (run_id, phase, metric_name, axis, max_points, x_min, x_max)
         cached = self._series_cache.get(cache_key)
         if cached is not None:
             return cached
         rows, total_points, downsampled = self._query_series_points(
-            connection, run_id, phase, metric_name, axis, max_points
+            connection, run_id, phase, metric_name, axis, max_points, x_min, x_max
         )
         points = [self._point_payload(row, axis) for row in rows]
         if len(points) > max_points:
@@ -842,6 +859,8 @@ class IndexQueries:
             "definition": metric["definition"],
             "definition_key": metric["definition_key"],
             "axis": axis,
+            "x_min": x_min,
+            "x_max": x_max,
             "points": points,
             "total_points": total_points,
             "returned_points": len(points),
@@ -855,31 +874,66 @@ class IndexQueries:
             self._series_cache.pop(next(iter(self._series_cache)))
         return payload
 
+    @staticmethod
+    def _range_clause(
+        axis: str, x_min: float | None, x_max: float | None
+    ) -> tuple[str, list]:
+        clauses: list[str] = []
+        params: list = []
+        if axis == "timestamp":
+            if x_min is not None:
+                clauses.append("timestamp >= ?")
+                params.append(
+                    format_timestamp(datetime.fromtimestamp(x_min, tz=timezone.utc))
+                )
+            if x_max is not None:
+                clauses.append("timestamp <= ?")
+                params.append(
+                    format_timestamp(datetime.fromtimestamp(x_max, tz=timezone.utc))
+                )
+        else:
+            if x_min is not None:
+                clauses.append(f"{axis} >= ?")
+                params.append(x_min)
+            if x_max is not None:
+                clauses.append(f"{axis} <= ?")
+                params.append(x_max)
+        return (("AND " + " AND ".join(clauses)) if clauses else ""), params
+
     def _query_series_points(
-        self, connection, run_id: str, phase: str, metric_name: str, axis: str, max_points: int
+        self,
+        connection,
+        run_id: str,
+        phase: str,
+        metric_name: str,
+        axis: str,
+        max_points: int,
+        x_min: float | None = None,
+        x_max: float | None = None,
     ) -> tuple[list, int, bool]:
-        """优先在 SQL 层做 min/max/首/尾分桶，避免把百万点搬进 Python。"""
+        """优先使用物化桶；源数据不完整时回退 SQL 分桶。"""
         axis_conditions = {
             "global_step": "global_step IS NOT NULL",
             "epoch": "epoch IS NOT NULL",
             "timestamp": "timestamp IS NOT NULL",
         }[axis]
+        range_sql, range_params = self._range_clause(axis, x_min, x_max)
         total = connection.execute(
             f"""
             SELECT COUNT(*) FROM metric_points
-            WHERE run_id = ? AND phase = ? AND metric_name = ? AND {axis_conditions}
+            WHERE run_id = ? AND phase = ? AND metric_name = ? AND {axis_conditions} {range_sql}
             """,
-            (run_id, phase, metric_name),
+            (run_id, phase, metric_name, *range_params),
         ).fetchone()[0]
         if total <= max_points:
             rows = connection.execute(
                 f"""
                 SELECT value, global_step, epoch, timestamp, session_id, {axis} AS x
                 FROM metric_points
-                WHERE run_id = ? AND phase = ? AND metric_name = ? AND {axis_conditions}
+                WHERE run_id = ? AND phase = ? AND metric_name = ? AND {axis_conditions} {range_sql}
                 ORDER BY {axis}, timestamp, id
                 """,
-                (run_id, phase, metric_name),
+                (run_id, phase, metric_name, *range_params),
             ).fetchall()
             return list(rows), total, False
         rollups = connection.execute(
@@ -891,7 +945,7 @@ class IndexQueries:
             """,
             (run_id, phase, metric_name, axis),
         ).fetchall()
-        if rollups and sum(row["point_count"] for row in rollups) == total:
+        if rollups and not range_params and sum(row["point_count"] for row in rollups) == total:
             points: list[dict] = []
             seen: set[tuple] = set()
             for row in rollups:
@@ -911,7 +965,7 @@ class IndexQueries:
             WITH filtered AS (
                 SELECT id, value, global_step, epoch, timestamp, session_id, {axis} AS x
                 FROM metric_points
-                WHERE run_id = ? AND phase = ? AND metric_name = ? AND {axis_conditions}
+                WHERE run_id = ? AND phase = ? AND metric_name = ? AND {axis_conditions} {range_sql}
             ),
             bounds AS (
                 SELECT MIN(x) AS min_x, MAX(x) AS max_x FROM filtered
@@ -939,7 +993,7 @@ class IndexQueries:
                OR scored.x = aggregates.last_x
             ORDER BY scored.x, scored.value
             """,
-            (run_id, phase, metric_name, bucket_count),
+            (run_id, phase, metric_name, *range_params, bucket_count),
         ).fetchall()
         return list(rows), total, len(rows) < total
 

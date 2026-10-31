@@ -40,7 +40,7 @@
 
 - 曲线查询优先使用 SQLite 物化桶（step 100 / epoch 1 / timestamp 60s），按请求分辨率合并；计数不一致时回退 SQL 分桶；增加覆盖索引；结果进程内缓存，同步时失效。
 - 百万点查询从约 9.4 s 降至约 3.1 s；代价是索引约 44 s、数据库约 1.66 GB（见 `docs/performance.md`）。
-- 未做缩放区间查询，仍不能称为“百万点秒开”。
+- 未做 UI 缩放区间接线，仍不能称为“百万点秒开”；后端区间查询已可用。
 
 **结果与插件**
 
@@ -84,6 +84,7 @@
 - `npm run test`：MetricChart 生命周期测试（2）通过。
 - `npm run build`：通过。
 - `npm run e2e`：真实 Chrome 1440×900、1366×768 工作区/多选/诊断，无 console error。
+- 新增 `.github/workflows/ci.yml` 的 Ubuntu/Windows/macOS × Python 3.11/3.13 矩阵；本次未实际运行该远端 CI。
 - 示例来源清单：7 个来源、4 个逻辑实验（`audit/run_inventory_examples.csv`）。
 - 百万点与 MLflow 10k 数据：见 `docs/performance.md`。
 - CUDA：本机无 torch/CUDA，**未验证**；只交付可复现矩阵脚本。
@@ -108,7 +109,7 @@
 
 - **62 个真实来源**：没有用户数据，未生成真实 `audit/run_inventory.csv`，未解释 53→62；只提供工具与示例清单。
 - **CUDA 根因**：未在用户环境复现，未验证修复；默认无后台线程是风险降低，不是已证明的根因修复。
-- **百万点**：3.5 s 首屏仍慢；缩放局部仍全量扫描；未做物化桶。
+- **百万点**：3.1 s 首屏仍慢；后端已有 `x_min/x_max` 区间查询，但 ECharts 缩放事件尚未接线，UI 缩放仍不会自动局部重查。
 - **字段映射**：歧义 CSV 仍无持久化人工映射 UI；只有逻辑实验归并。
 - **结果图像**：已支持 TensorBoard image 事件缓存；未做 histogram/audio、多光谱/GeoTIFF 波段/掩膜配置；“确认并转 artifact”未实现。
 - **插件**：仅 Python source adapter manifest；前端仍不能动态安装。

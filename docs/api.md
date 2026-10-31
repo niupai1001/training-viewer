@@ -55,12 +55,14 @@
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/runs/{run_id}/metric-keys` | 指标键、单位、方向、定义、点数、Best/Last |
-| GET | `/runs/{run_id}/metrics?series=val/miou&series=train/loss&axis=auto&max_points=2000` | 单运行多指标曲线 |
+| GET | `/runs/{run_id}/metrics?series=val/miou&series=train/loss&axis=auto&max_points=2000&x_min=100&x_max=500` | 单运行多指标曲线；可选区间 |
 | POST | `/compare/query` | 多运行对比 |
 | GET | `/runs/{run_id}/metrics/export?series=...&axis=...&format=csv&smoothing_method=ema&smoothing_window=5&scale=linear` | 下载单运行数据 |
 | POST | `/compare/export` | 下载对比数据 |
 
 `axis` 可为 `global_step`、`epoch`、`timestamp`、`auto`（默认）。`auto` 按每个指标真实存在的字段选择：优先 `global_step`，否则 `epoch`，否则 `timestamp`；不会伪造 Step。时间轴返回 Unix 秒，前端按浏览器本地时区显示。响应中每个 series 带自己的 `axis`。
+
+`x_min` / `x_max` 可选，按当前轴的单位限制查询区间；时间轴用 Unix 秒。区间查询仍返回该区间内的 `total_points`，不会伪造区间外的点。当前前端尚未把 ECharts 缩放事件接到该参数，API 已就绪。
 
 ### 曲线响应要点
 

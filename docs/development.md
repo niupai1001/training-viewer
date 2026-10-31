@@ -57,6 +57,8 @@ python tools/export_source_inventory.py --data-dir <数据目录> --root D:/outp
 
 CUDA 矩阵在无 torch/CUDA 时返回 `skipped`；MLflow spike 需要可选 `mlflow-skinny`，只用于 ADR 对照，不进入生产依赖。结果与限制见 [`docs/performance.md`](performance.md)。
 
+`.github/workflows/ci.yml` 在 Ubuntu/Windows/macOS × Python 3.11/3.13 运行后端测试，并在 Ubuntu 运行前端 typecheck/test/build；它不能替代本机 CUDA 验证。
+
 Vite 开发服务器默认 `http://127.0.0.1:5173`，把 `/api` 代理到 `http://127.0.0.1:8765`。另开终端启动后端：
 
 ```powershell
