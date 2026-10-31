@@ -46,12 +46,18 @@ async function assertViewport(width, height, suffix) {
     await page.getByText(/当前只查询/).waitFor({ state: "hidden", timeout: 10000 });
   }
 
-  await page.locator(".run-selector-name").filter({ hasText: /^Live SegFormer review run$/ }).click();
-  await page
-    .locator(".run-selector-item")
-    .filter({ hasText: "Epoch-only validation run" })
-    .locator('input[type="checkbox"]')
-    .check();
+  const groupIndex = await page.locator(".run-selector-experiment").evaluateAll((groups) =>
+    groups.findIndex((group) => group.querySelectorAll(".run-selector-item").length >= 2),
+  );
+  if (groupIndex >= 0) {
+    const group = page.locator(".run-selector-experiment").nth(groupIndex);
+    await group.locator(".run-selector-item input").nth(0).check();
+    await group.locator(".run-selector-item input").nth(1).check();
+  } else {
+    const items = page.locator(".run-selector-item");
+    await items.nth(0).locator('input[type="checkbox"]').check();
+    await items.nth(1).locator('input[type="checkbox"]').check();
+  }
   await page.getByText(/个训练叠加/).waitFor({ timeout: 15000 });
   await page.locator(".metric-chart-canvas canvas").first().waitFor({ timeout: 15000 });
   await page.screenshot({
@@ -59,16 +65,20 @@ async function assertViewport(width, height, suffix) {
     fullPage: true,
   });
 
-  await page.goto(
-    `${baseUrl}#/runs?project=alpha&experiment=${encodeURIComponent("文件导入")}`,
-    { waitUntil: "domcontentloaded" },
-  );
-  await page.getByText(/筛选：alpha/).waitFor({ timeout: 15000 });
+  const projectLink = page.locator(".run-selector-project h3 a").first();
+  const projectName = (await projectLink.innerText()).trim();
+  const escapedProject = projectName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const projectHref = await projectLink.getAttribute("href");
+  await page.goto(new URL(projectHref, baseUrl).toString(), { waitUntil: "domcontentloaded" });
+  await page.getByText(new RegExp(`筛选：${escapedProject}`)).waitFor({ timeout: 15000 });
   if ((await page.locator(".run-selector-project").count()) !== 1) {
     throw new Error("项目/实验组筛选没有收敛到单个项目");
   }
   await page.getByRole("link", { name: "清除" }).click();
-  await page.getByText(/筛选：alpha/).waitFor({ state: "hidden", timeout: 15000 });
+  await page.getByText(new RegExp(`筛选：${escapedProject}`)).waitFor({
+    state: "hidden",
+    timeout: 15000,
+  });
 
   await page.goto(`${baseUrl}#/diagnostics`, { waitUntil: "domcontentloaded" });
   await page.getByRole("heading", { name: "设置与诊断", exact: true }).waitFor();
