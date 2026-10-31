@@ -8,13 +8,14 @@ from __future__ import annotations
 import csv
 import json
 import math
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from ..security.path_guard import UnsafeArtifactPathError, resolve_artifact_path
-from ..results.discovery import discover_result_files
+from ..results.discovery import discover_result_files, discover_tensorboard_images
 from ..service import TrainingViewerService
 from .dependencies import ensure_run_directory_allowed, get_service
 
@@ -90,11 +91,43 @@ def result_candidates(
             f"/api/v1/runs/{run_id}/result-candidates/content"
             f"?path={candidate['path']}"
         )
+    tensorboard_candidates = discover_tensorboard_images(
+        run_directory, service.paths.data_dir / "result-cache", run_id
+    )
+    for candidate in tensorboard_candidates:
+        candidate["content_url"] = (
+            f"/api/v1/runs/{run_id}/result-candidates/tensorboard-content"
+            f"?cache_file={candidate['cache_file']}"
+        )
+    candidates.extend(tensorboard_candidates)
     return {
         "run_id": run_id,
         "candidates": candidates,
-        "note": "路径/文件名推断只是候选；确认前不要作为科学结论。",
+        "note": "路径/文件名推断只是候选；TensorBoard image 事件来自官方 loader 并缓存；确认前不要作为科学结论。",
     }
+
+
+@router.get("/runs/{run_id}/result-candidates/tensorboard-content")
+def tensorboard_candidate_content(
+    run_id: str,
+    cache_file: str,
+    service: TrainingViewerService = Depends(get_service),
+) -> FileResponse:
+    if service.queries.get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail=f"找不到运行：{run_id}")
+    if not re.fullmatch(r"[a-f0-9]{24}\.png", cache_file):
+        raise HTTPException(status_code=403, detail="非法的 TensorBoard 图片缓存名。")
+    base = (service.paths.data_dir / "result-cache" / run_id).resolve()
+    resolved = (base / cache_file).resolve()
+    if not resolved.is_relative_to(base) or not resolved.is_file():
+        raise HTTPException(status_code=404, detail="TensorBoard 图片缓存不存在。")
+    return FileResponse(
+        resolved,
+        media_type="image/png",
+        filename=resolved.name,
+        content_disposition_type="inline",
+        headers=_SECURITY_HEADERS,
+    )
 
 
 @router.get("/runs/{run_id}/result-candidates/content")

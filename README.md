@@ -284,7 +284,7 @@ npm run build
 
 测试覆盖：完整行/半行/坏行、截断重建、重复导入、断点续训、状态/活动分离、同 Step 多阶段、自动横轴、CSV 映射、TensorBoard 标量、任意 CSV/TSV/JSONL/文本、run_id 冲突、目录移动、增量扫描、降采样与原始 Best/Last、产物路径穿越、Host/Origin 校验、导出、CLI 校验、训练写入器与恢复会话。当前结果：**76 通过，2 跳过**（跳过的是 Windows 环境不允许创建符号链接的用例）。
 
-前端另有两个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 在 1440×900 与 1366×768 覆盖工作区、多选叠加和设置页。当前结果：**89 通过，2 跳过**。百万点、MLflow 原型与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
+前端另有两个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 在 1440×900 与 1366×768 覆盖工作区、多选叠加和设置页。当前结果：**90 通过，2 跳过**。百万点、MLflow 原型与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
 
 ## 已知限制
 
@@ -300,7 +300,7 @@ npm run build
 - 普通文本日志只支持规则模板能明确识别的 Step/Epoch + 指标键值；歧义 CSV 还没有持久化人工字段映射界面。
 - 逻辑实验归并只支持同一目录内的文件；跨目录规则会被拒绝。
 - TensorBoard 仍从事件文件开头遍历并跳过已消费序号，不是真正的字节 seek；十万级以上事件文件未验证。
-- TensorBoard image 事件未解析；已有图片通过“结果文件候选”发现，需用户确认，多光谱/GeoTIFF 波段配置未实现。
+- TensorBoard image 事件会缓存为结果图片；多光谱/GeoTIFF 波段合成、掩膜色盘尚未实现，不能默认加载全量栅格。
 - Python 来源插件支持 manifest/状态/失败隔离；前端产物插件仍是编译期内建，不支持动态安装。
 - CUDA `0xC0000005` 未在用户机器复现；writer 已默认无后台心跳线程并提供隔离矩阵脚本，但不能宣称根因已修复。
 - 本版本只在 Windows 实机复验；macOS/Linux 的目录选择框、watchdog 与路径差异未独立验证。
@@ -332,4 +332,3 @@ npm run build
 ## 许可证
 
 本项目采用 Apache License 2.0，见 [`LICENSE`](LICENSE)。主要依赖及其许可证见 [`docs/third-party-licenses.md`](docs/third-party-licenses.md)。
-

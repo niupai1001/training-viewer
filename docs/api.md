@@ -26,8 +26,9 @@
 | GET | `/audit/sources` | 来源文件 → 逻辑实验清单（parser、置信度、点数、是否归并） |
 | GET | `/logical-runs/overrides` / POST / DELETE `/logical-runs/overrides/{id}` | 用户确认的逻辑实验归并规则；sidecar 存在数据目录 |
 | GET | `/plugins` | Python 来源适配器清单、manifest、加载状态/错误；不包含前端动态插件 |
-| GET | `/runs/{run_id}/result-candidates` | 事件之外的结果图片候选，全部 `requires_confirmation=true` |
+| GET | `/runs/{run_id}/result-candidates` | 事件之外的结果图片候选 + TensorBoard image 事件缓存；目录推断为 `requires_confirmation=true` |
 | GET | `/runs/{run_id}/result-candidates/content?path=...` | 安全内联候选图片；只允许图片后缀且在 Run 目录内 |
+| GET | `/runs/{run_id}/result-candidates/tensorboard-content?cache_file=...` | 安全内联 TensorBoard image 缓存；缓存名白名单 |
 
 ### `/runs` 查询参数
 

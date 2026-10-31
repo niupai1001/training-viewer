@@ -44,7 +44,7 @@
 
 **结果与插件**
 
-- 新增结果文件候选发现（事件之外的预测/标签/输入图片），全部标记 `requires_confirmation=true`，只读安全图片；未确认不进入结论。
+- 新增结果文件候选发现：TensorBoard image 事件（官方 loader，缓存到 Viewer 数据目录）与事件之外的预测/标签/输入图片；目录推断标记 `requires_confirmation=true`，未确认不进入结论。
 - 新增 Python 来源插件 manifest 校验、加载状态、失败记录和 `GET /plugins`；前端动态插件仍不支持，文档明确说明。
 - 新增 `tests/test_audit_features.py` 覆盖来源清单、插件清单、结果候选和安全内容。
 
@@ -78,7 +78,7 @@
 
 ## 5. 验证结果
 
-- `pytest -q`：**89 passed，2 skipped**（Windows 符号链接限制）。
+- `pytest -q`：**90 passed，2 skipped**（Windows 符号链接限制）。
 - `ruff check src tests tools --select F,E9`：通过。
 - `npm run typecheck`：通过。
 - `npm run test`：MetricChart 生命周期测试（2）通过。
@@ -110,7 +110,7 @@
 - **CUDA 根因**：未在用户环境复现，未验证修复；默认无后台线程是风险降低，不是已证明的根因修复。
 - **百万点**：3.5 s 首屏仍慢；缩放局部仍全量扫描；未做物化桶。
 - **字段映射**：歧义 CSV 仍无持久化人工映射 UI；只有逻辑实验归并。
-- **结果图像**：未解析 TensorBoard image 事件，未做多光谱/GeoTIFF 波段/掩膜配置；“确认并转 artifact”未实现。
+- **结果图像**：已支持 TensorBoard image 事件缓存；未做 histogram/audio、多光谱/GeoTIFF 波段/掩膜配置；“确认并转 artifact”未实现。
 - **插件**：仅 Python source adapter manifest；前端仍不能动态安装。
 - **跨平台**：只在 Windows 实机验证；macOS/Linux 未验证。
 - **UI**：旧页面文件已删除；指标选择偏好已持久化；对比默认会优先使用上次选中的验证指标，但仍不是完整的指标偏好管理。

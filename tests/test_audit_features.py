@@ -1,8 +1,10 @@
 """审计新增接口：来源清单、逻辑映射、结果候选与插件清单。"""
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 
+import pytest
 from conftest import make_run_directory, metric_record
 
 
@@ -52,6 +54,59 @@ def test_result_candidates_are_labeled_and_safely_served(client) -> None:
         params={"path": "../../secret.png"},
     )
     assert traversal.status_code in (403, 404)
+
+
+def test_tensorboard_image_events_are_cached_as_results(client, tmp_path: Path) -> None:
+    pytest.importorskip("tensorboard")
+    from tensorboard.compat.proto.event_pb2 import Event
+    from tensorboard.compat.proto.summary_pb2 import Summary
+    from tensorboard.summary.writer.event_file_writer import EventFileWriter
+
+    test_client, service = client
+    log_root = Path(service.paths.data_dir).parent / "tb-images"
+    log_root.mkdir(parents=True)
+    png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+        "YAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+    )
+    writer = EventFileWriter(str(log_root))
+    try:
+        writer.add_event(
+            Event(
+                step=3,
+                wall_time=1761900000.0,
+                summary=Summary(
+                    value=[
+                        Summary.Value(
+                            tag="val/prediction/sample-001",
+                            image=Summary.Image(
+                                encoded_image_string=png,
+                                height=1,
+                                width=1,
+                                colorspace=1,
+                            ),
+                        )
+                    ]
+                ),
+            )
+        )
+        writer.flush()
+    finally:
+        writer.close()
+    test_client.post("/api/v1/roots", json={"path": str(log_root)})
+    runs = test_client.get("/api/v1/runs", params={"q": "tb-images"}).json()["runs"]
+    assert runs
+    payload = test_client.get(
+        f"/api/v1/runs/{runs[0]['run_id']}/result-candidates"
+    ).json()
+    event_candidates = [
+        item for item in payload["candidates"] if item["confidence"] == "event-image"
+    ]
+    assert event_candidates
+    assert event_candidates[0]["requires_confirmation"] is False
+    content = test_client.get(event_candidates[0]["content_url"])
+    assert content.status_code == 200
+    assert content.headers["content-type"] == "image/png"
 
 
 def test_logical_override_api_round_trip(client) -> None:
