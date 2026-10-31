@@ -1,0 +1,8 @@
+{"timestamp":"2026-10-31T08:00:10Z","session_id":"session-101","global_step":100,"epoch":1,"phase":"train","metrics":{"loss":0.75,"lr":0.00018}}
+{"timestamp":"2026-10-31T08:00:40Z","session_id":"session-101","global_step":100,"epoch":1,"phase":"val","metrics":{"loss":0.79,"miou":0.46,"f1":0.54}}
+{"timestamp":"2026-10-31T08:02:10Z","session_id":"session-101","global_step":200,"epoch":2,"phase":"train","metrics":{"loss":0.61,"lr":0.00016}}
+{"timestamp":"2026-10-31T08:02:40Z","session_id":"session-101","global_step":200,"epoch":2,"phase":"val","metrics":{"loss":0.68,"miou":0.55,"f1":0.66}}
+{"timestamp":"2026-10-31T08:04:10Z","session_id":"session-101","global_step":300,"epoch":3,"phase":"train","metrics":{"loss":0.52,"lr":0.00013}}
+{"timestamp":"2026-10-31T08:04:40Z","session_id":"session-101","global_step":300,"epoch":3,"phase":"val","metrics":{"loss":0.61,"miou":0.59,"f1":0.7}}
+{"timestamp":"2026-10-31T08:06:10Z","session_id":"session-101","global_step":400,"epoch":4,"phase":"train","metrics":{"loss":0.47,"lr":0.0001}}
+{"timestamp":"2026-10-31T08:06:40Z","session_id":"session-101","global_step":400,"epoch":4,"phase":"val","metrics":{"loss":0.58,"miou":0.61,"f1":0.72}}

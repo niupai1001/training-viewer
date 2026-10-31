@@ -1,0 +1,103 @@
+{
+  "name": "training-viewer-vscode",
+  "displayName": "Training Viewer",
+  "description": "从 VS Code 启动本机 Training Viewer，选择训练日志目录并打开实验对比。",
+  "version": "1.0.0",
+  "publisher": "training-viewer",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onCommand:trainingViewer.open",
+    "onCommand:trainingViewer.openCurrentFolder",
+    "onCommand:trainingViewer.addFolder",
+    "onCommand:trainingViewer.compareSelectedRuns",
+    "onCommand:trainingViewer.refreshRuns",
+    "onView:trainingViewer.runs"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "trainingViewer.open",
+        "title": "Training Viewer: 打开查看器"
+      },
+      {
+        "command": "trainingViewer.openCurrentFolder",
+        "title": "Training Viewer: 用当前工作区打开"
+      },
+      {
+        "command": "trainingViewer.addFolder",
+        "title": "Training Viewer: 添加训练日志目录"
+      },
+      {
+        "command": "trainingViewer.compareSelectedRuns",
+        "title": "Training Viewer: 对比勾选的运行"
+      },
+      {
+        "command": "trainingViewer.refreshRuns",
+        "title": "Training Viewer: 刷新运行列表"
+      }
+    ],
+    "configuration": {
+      "title": "Training Viewer",
+      "properties": {
+        "trainingViewer.command": {
+          "type": "string",
+          "default": "training-viewer",
+          "description": "启动 Training Viewer 的命令名或可执行文件路径。"
+        },
+        "trainingViewer.port": {
+          "type": "number",
+          "default": 8765,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "本机服务端口。若端口被占用，命令行会自动选择相邻端口；插件会读取实例文件。"
+        },
+        "trainingViewer.dataDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "可选：应用数据目录（SQLite 索引与界面备注）。留空时使用系统默认目录。"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "trainingViewer",
+          "title": "Training Viewer",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "trainingViewer": [
+        {
+          "id": "trainingViewer.runs",
+          "name": "运行与项目"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "trainingViewer.refreshRuns",
+          "when": "view == trainingViewer.runs",
+          "group": "navigation"
+        },
+        {
+          "command": "trainingViewer.addFolder",
+          "when": "view == trainingViewer.runs",
+          "group": "navigation"
+        },
+        {
+          "command": "trainingViewer.compareSelectedRuns",
+          "when": "view == trainingViewer.runs",
+          "group": "navigation"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "run_id": "2f4d1b7e-6c2a-4b8f-9e31-5a0d7c4e8b12",
+  "project": "disaster-detection",
+  "experiment": "encoder-ablation",
+  "name": "SegFormer 波长条件化输入｜10 波段｜随机种子 43",
+  "created_at": "2026-10-31T08:00:00Z",
+  "task": "semantic-segmentation",
+  "model": {
+    "name": "SegFormer",
+    "architecture": "MiT-B2"
+  },
+  "dataset": {
+    "name": "landslide-dataset",
+    "version": "v1",
+    "split_definition": "split-v1"
+  },
+  "source": {
+    "git_commit": "def5678",
+    "seed": 43,
+    "framework": "pytorch"
+  },
+  "tags": [
+    "wavelength-embedding",
+    "10-band"
+  ],
+  "config": {
+    "epochs": 4,
+    "batch_size": 8,
+    "optimizer": {
+      "name": "AdamW",
+      "lr": 0.0002
+    },
+    "input_bands": 10,
+    "wavelength_embedding": true
+  },
+  "metric_definitions": {
+    "train/loss": {
+      "direction": "min",
+      "unit": "none"
+    },
+    "val/loss": {
+      "direction": "min",
+      "unit": "none"
+    },
+    "val/miou": {
+      "direction": "max",
+      "unit": "ratio",
+      "aggregation": "macro",
+      "definition": "classes 0..4, ignore_index=255"
+    },
+    "val/f1": {
+      "direction": "max",
+      "unit": "ratio",
+      "aggregation": "macro",
+      "definition": "classes 0..4, ignore_index=255"
+    },
+    "train/lr": {
+      "direction": "none",
+      "unit": "1/step"
+    }
+  }
+}

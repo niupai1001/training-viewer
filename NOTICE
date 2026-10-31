@@ -1,0 +1,32 @@
+Training Viewer
+Copyright 2026 Training Viewer contributors
+
+This product includes software developed by third parties. The following
+components are used as dependencies and are not modified copies of their
+source code unless explicitly stated.
+
+- Apache ECharts (https://echarts.apache.org/) — Apache License 2.0
+  Bundled into the frontend static assets (`src/training_viewer/web/assets/`).
+
+- TensorBoard (https://www.tensorflow.org/tensorboard) — Apache License 2.0
+  Optional dependency; used through its public event-file loader API.
+
+- FastAPI (https://fastapi.tiangolo.com/) — MIT License
+- Starlette (https://www.starlette.io/) — BSD 3-Clause License
+- Uvicorn (https://www.uvicorn.org/) — BSD 3-Clause License
+- Pydantic (https://docs.pydantic.dev/) — MIT License
+- watchdog (https://github.com/gorakhargosh/watchdog) — Apache License 2.0
+- jsonschema (https://github.com/python-jsonschema/jsonschema) — MIT License
+- React (https://react.dev/) — MIT License
+- Vite (https://vite.dev/) — MIT License
+- TypeScript (https://www.typescriptlang.org/) — Apache License 2.0
+- pytest (https://pytest.org/) — MIT License
+- httpx (https://www.python-httpx.org/) — BSD 3-Clause License
+- Ruff (https://docs.astral.sh/ruff/) — MIT License
+
+The full license text of each dependency is included in the corresponding
+installed package. This file is informational; it does not replace the
+license files distributed with those packages.
+
+The example images under `examples/` are synthetic placeholders derived from
+the supplied design sample, not third-party training datasets.

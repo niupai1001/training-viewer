@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "run_id": "5b8e2c41-7d3a-4f90-8c62-1e9a0b4d7f35",
+  "project": "disaster-detection",
+  "experiment": "format-adapters",
+  "name": "CSV 指标日志适配示例｜逻辑回归基线",
+  "created_at": "2026-10-30T09:00:00Z",
+  "task": "classification",
+  "model": {
+    "name": "逻辑回归基线",
+    "architecture": "linear"
+  },
+  "dataset": {
+    "name": "landslide-dataset",
+    "version": "v1",
+    "split_definition": "split-v1"
+  },
+  "source": {
+    "seed": 7,
+    "framework": "scikit-learn"
+  },
+  "tags": [
+    "format-adapter",
+    "csv"
+  ],
+  "config": {
+    "epochs": 3,
+    "batch_size": 64,
+    "optimizer": {
+      "name": "SGD",
+      "lr": 0.001
+    }
+  },
+  "metric_definitions": {
+    "train/loss": {
+      "direction": "min",
+      "unit": "none"
+    },
+    "val/loss": {
+      "direction": "min",
+      "unit": "none"
+    },
+    "val/accuracy": {
+      "direction": "max",
+      "unit": "ratio",
+      "definition": "五类分类准确率，验证集 split-v1"
+    },
+    "train/learning_rate": {
+      "direction": "none",
+      "unit": "none"
+    }
+  },
+  "extensions": {
+    "csv_metric_mapping": {
+      "step_column": "step",
+      "epoch_column": "epoch",
+      "timestamp_column": "timestamp",
+      "phase_column": "phase",
+      "metric_columns": [
+        "loss",
+        "accuracy",
+        "learning_rate"
+      ]
+    }
+  }
+}

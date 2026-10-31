@@ -1,0 +1,4 @@
+{"type":"lifecycle","timestamp":"2026-10-31T08:00:00Z","session_id":"session-001","status":"started"}
+{"type":"heartbeat","timestamp":"2026-10-31T08:02:00Z","session_id":"session-001","global_step":200}
+{"type":"artifact","timestamp":"2026-10-31T08:02:30Z","session_id":"session-001","path":"artifacts/predictions/sample-001.png","artifact_type":"image","tag":"segmentation-preview","phase":"val","epoch":2,"global_step":200,"group_id":"sample-001-epoch-2","sample_id":"sample-001","role":"prediction"}
+{"type":"artifact","timestamp":"2026-10-31T08:02:30Z","session_id":"session-001","path":"artifacts/labels/sample-001.png","artifact_type":"image","tag":"segmentation-preview","phase":"val","epoch":2,"global_step":200,"group_id":"sample-001-epoch-2","sample_id":"sample-001","role":"ground_truth"}

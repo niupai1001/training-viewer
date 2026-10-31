@@ -1,0 +1,4 @@
+{"timestamp":"2026-10-31T08:01:00Z","session_id":"session-001","global_step":100,"epoch":1,"phase":"train","metrics":{"loss":0.78,"lr":0.0001}}
+{"timestamp":"2026-10-31T08:01:30Z","session_id":"session-001","global_step":100,"epoch":1,"phase":"val","metrics":{"loss":0.81,"miou":0.43,"f1":0.51}}
+{"timestamp":"2026-10-31T08:02:00Z","session_id":"session-001","global_step":200,"epoch":2,"phase":"train","metrics":{"loss":0.64,"lr":9.5e-05}}
+{"timestamp":"2026-10-31T08:02:30Z","session_id":"session-001","global_step":200,"epoch":2,"phase":"val","metrics":{"loss":0.7,"miou":0.52,"f1":0.63}}

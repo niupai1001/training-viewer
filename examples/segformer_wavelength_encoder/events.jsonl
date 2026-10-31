@@ -1,0 +1,6 @@
+{"type":"lifecycle","timestamp":"2026-10-31T08:00:00Z","session_id":"session-101","status":"started","message":"示例：验证波长条件化输入编码器"}
+{"type":"heartbeat","timestamp":"2026-10-31T08:05:00Z","session_id":"session-101","global_step":350}
+{"type":"artifact","timestamp":"2026-10-31T08:06:40Z","session_id":"session-101","path":"artifacts/predictions/sample-001.png","artifact_type":"image","tag":"segmentation-preview","phase":"val","epoch":4,"global_step":400,"group_id":"sample-001-epoch-4","sample_id":"sample-001","role":"prediction"}
+{"type":"artifact","timestamp":"2026-10-31T08:06:40Z","session_id":"session-101","path":"artifacts/labels/sample-001.png","artifact_type":"image","tag":"segmentation-preview","phase":"val","epoch":4,"global_step":400,"group_id":"sample-001-epoch-4","sample_id":"sample-001","role":"ground_truth"}
+{"type":"artifact","timestamp":"2026-10-31T08:06:45Z","session_id":"session-101","path":"artifacts/tables/confusion_matrix.csv","artifact_type":"table","tag":"segmentation-metrics","phase":"val","epoch":4,"global_step":400,"group_id":"confusion-epoch-4","role":"confusion_matrix"}
+{"type":"lifecycle","timestamp":"2026-10-31T08:07:00Z","session_id":"session-101","status":"completed","message":"示例运行完成"}

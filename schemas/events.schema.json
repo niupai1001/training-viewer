@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:training-viewer:event:1.0",
+  "title": "Training Viewer Events v1.0",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "extensions": {
+          "type": "object"
+        },
+        "type": {
+          "const": "lifecycle"
+        },
+        "status": {
+          "enum": [
+            "started",
+            "resumed",
+            "completed",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "timestamp",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "extensions": {
+          "type": "object"
+        },
+        "type": {
+          "const": "heartbeat"
+        },
+        "global_step": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "type",
+        "timestamp"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "extensions": {
+          "type": "object"
+        },
+        "type": {
+          "const": "artifact"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_type": {
+          "enum": [
+            "image",
+            "table",
+            "figure",
+            "html",
+            "model",
+            "file"
+          ]
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "phase": {
+          "type": "string"
+        },
+        "global_step": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "group_id": {
+          "type": "string"
+        },
+        "sample_id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "mime_type": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "type",
+        "timestamp",
+        "path",
+        "artifact_type",
+        "tag"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

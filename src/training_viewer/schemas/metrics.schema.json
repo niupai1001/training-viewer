@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:training-viewer:metric:1.0",
+  "title": "Training Viewer Scalar Metric Record v1.0",
+  "type": "object",
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "phase": {
+      "type": "string",
+      "minLength": 1
+    },
+    "global_step": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "epoch": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "epoch_progress": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "wall_time_sec": {
+      "type": "number",
+      "minimum": 0
+    },
+    "metrics": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "timestamp",
+    "phase",
+    "metrics"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "global_step"
+      ]
+    },
+    {
+      "required": [
+        "epoch"
+      ]
+    }
+  ],
+  "additionalProperties": false
+}

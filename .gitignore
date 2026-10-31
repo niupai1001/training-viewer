@@ -1,0 +1,16 @@
+.venv/
+.tmp/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+node_modules/
+npm-debug.log*
+.vscode/*
+.training-viewer-data/
+.ruff_cache/
+pytest-of-*/

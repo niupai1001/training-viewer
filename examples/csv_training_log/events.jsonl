@@ -1,0 +1,3 @@
+{"type":"lifecycle","timestamp":"2026-10-30T09:00:00Z","session_id":"csv-session-1","status":"started","message":"示例：CSV 指标日志适配"}
+{"type":"heartbeat","timestamp":"2026-10-30T09:02:00Z","session_id":"csv-session-1","global_step":160}
+{"type":"lifecycle","timestamp":"2026-10-30T09:02:50Z","session_id":"csv-session-1","status":"completed","message":"示例运行完成"}
