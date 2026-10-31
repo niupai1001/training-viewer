@@ -62,7 +62,7 @@ class MetricCsvExporter:
                             run.get("run_id"),
                             run.get("name"),
                             series.get("key"),
-                            axis,
+                            series.get("axis", axis),
                             point.get("x"),
                             point.get("value"),
                             point.get("global_step"),

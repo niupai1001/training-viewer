@@ -400,6 +400,10 @@ def _open_command(args: argparse.Namespace) -> int:
     if port != args.port:
         print(f"端口 {args.port} 已被占用，改用 {port}。")
     service = TrainingViewerService(paths, scan_interval_seconds=args.interval)
+    if not roots:
+        restored = service.list_roots()
+        if restored:
+            print(f"恢复上次工作区：{len(restored)} 个日志根目录。")
     for root in roots:
         try:
             service.add_root(root)

@@ -16,6 +16,7 @@
 | Step（优化步） | 优化器更新次数 | `global_step`；累计模型参数更新次数，恢复训练时不应回退 |
 | Epoch（训练轮次） | 训练轮次 | 数据集完整遍历一次；从 1 开始计数 |
 | Checkpoint（检查点） | 训练检查点 | 保存并恢复训练状态的文件；查看器只作为产物引用，不加载 |
+| Activity（活动） | 最近数据活动 | 独立于生命周期状态；`updating` / `idle` / `finished` / `unknown`，只表示日志是否有新数据，不证明训练进程存在 |
 | `run_id` | 运行唯一标识 | 协议字段。用 UUID 生成，不随目录移动改变 |
 | `session_id` | 执行会话标识 | 协议字段。每次训练进程启动生成新值 |
 
@@ -39,6 +40,8 @@
 | 缩写 / 词 | 完整名称 / 中文含义 | 在本项目中的作用 |
 |---|---|---|
 | Source Adapter（适配器） | 日志来源适配器 | 把一种日志源转换为统一记录，例如 TensorBoard、CSV |
+| Generic Log File Source（通用日志文件来源） | 任意文件名日志来源 | 内容嗅探 CSV/TSV/JSONL/纯文本，每个文件生成一个合成 Run；无需 run.json |
+| Auto Axis（自动横轴） | 按数据选择横轴 | 每个指标按真实存在的 `global_step` → `epoch` → `timestamp` 回退，缺少 Step 时不伪造 |
 | Writer | 日志写入器 | 训练程序侧的 `TrainingRunWriter`，创建标准 Run 并追加指标/事件；不启动服务 |
 | attach | 接入 / 挂载 | `training-viewer attach` 把日志目录注册到后台查看器并返回 URL |
 | detached process | 脱离终端会话的后台进程 | `attach` 用它启动服务，Agent 退出后仍可浏览 |

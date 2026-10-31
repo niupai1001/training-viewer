@@ -89,7 +89,7 @@ class RunDirectoryScanner:
                 break
             result.scanned_directory_count += 1
             try:
-                discovered = self.registry.find_adapter(directory)
+                discovered_runs = self.registry.find_adapters(directory)
             except (InvalidRunDirectoryError, ReaderUnavailableError) as error:
                 result.issues.append(ScanIssue(str(directory), str(error)))
                 # 已知是 Run 目录但元数据/依赖有问题：不再向下扫描它的产物目录。
@@ -97,8 +97,8 @@ class RunDirectoryScanner:
             except OSError as error:
                 result.issues.append(ScanIssue(str(directory), f"目录读取失败：{error}", "warning"))
                 continue
-            if discovered is not None:
-                result.runs.append(discovered)
+            if discovered_runs:
+                result.runs.extend(discovered_runs)
                 continue
             if depth >= self.max_depth:
                 result.issues.append(

@@ -14,6 +14,7 @@ from ..indexing.database import IndexDatabase
 from ..log_readers.base import epoch_seconds_from_iso
 
 VALID_AXES = ("global_step", "epoch", "timestamp")
+AXIS_REQUESTS = (*VALID_AXES, "auto")
 STATUS_LABELS = {
     "running": "运行中",
     "completed": "已完成",
@@ -22,6 +23,13 @@ STATUS_LABELS = {
     "unknown": "状态未知（可能中断）",
     "imported": "已导入（无生命周期事件）",
 }
+ACTIVITY_LABELS = {
+    "updating": "最近仍在更新",
+    "idle": "已停止更新",
+    "finished": "已结束",
+    "unknown": "活动未知",
+}
+TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 
 
 def _definition_for(metadata: dict, phase: str, metric_name: str) -> tuple[str | None, dict]:
@@ -42,8 +50,9 @@ def _relative_source_path(run_directory: str, file_path: str) -> str:
 class IndexQueries:
     """查询索引数据库，输出与前端/导出器约定的字典结构。"""
 
-    def __init__(self, database: IndexDatabase):
+    def __init__(self, database: IndexDatabase, now=None):
         self.database = database
+        self._now = now or (lambda: datetime.now(timezone.utc))
 
     # ------------------------------------------------------------------ 运行目录树
     def projects(self) -> dict:
@@ -240,6 +249,7 @@ class IndexQueries:
     ) -> dict:
         metadata = json.loads(row["metadata_json"])
         primary_metric = self._primary_metric(connection, row["run_id"], metadata)
+        activity = self._activity_for(row["status"], time_range.get("last_metric_at"))
         return {
             "run_id": row["run_id"],
             "name": row["name"],
@@ -249,6 +259,8 @@ class IndexQueries:
             "status": row["status"],
             "status_label": STATUS_LABELS.get(row["status"], row["status"]),
             "status_reason": row["status_reason"],
+            "activity": activity,
+            "activity_label": ACTIVITY_LABELS.get(activity, activity),
             "created_at": row["created_at"],
             "last_updated_at": row["last_updated_at"],
             "started_at": time_range.get("started_at"),
@@ -422,6 +434,7 @@ class IndexQueries:
         warnings = self._run_warnings(
             row, metadata, counts, issues, metric_keys, step_warnings
         )
+        activity = self._activity_for(row["status"], time_range.get("last_metric_at"))
         return {
             "run_id": row["run_id"],
             "name": row["name"],
@@ -431,6 +444,8 @@ class IndexQueries:
             "status": row["status"],
             "status_label": STATUS_LABELS.get(row["status"], row["status"]),
             "status_reason": row["status_reason"],
+            "activity": activity,
+            "activity_label": ACTIVITY_LABELS.get(activity, activity),
             "created_at": row["created_at"],
             "last_updated_at": row["last_updated_at"],
             "started_at": time_range.get("started_at"),
@@ -692,10 +707,10 @@ class IndexQueries:
         self,
         run_id: str,
         series_keys: list[str],
-        axis: str = "global_step",
+        axis: str = "auto",
         max_points: int = 2000,
     ) -> dict:
-        if axis not in VALID_AXES:
+        if axis not in AXIS_REQUESTS:
             raise ValueError(f"不支持的横轴：{axis}")
         max_points = max(10, min(int(max_points), 20000))
         with self.database.connection() as connection:
@@ -719,8 +734,11 @@ class IndexQueries:
                         }
                     )
                     continue
+                resolved_axis = self._resolve_axis(match, axis)
                 series.append(
-                    self._series_payload(connection, run_id, match, axis, max_points)
+                    self._series_payload(
+                        connection, run_id, match, resolved_axis, max_points
+                    )
                 )
             if not series and not warnings:
                 warnings.append(
@@ -737,6 +755,31 @@ class IndexQueries:
             "series": series,
             "warnings": warnings,
         }
+
+    @staticmethod
+    def _resolve_axis(metric: dict, requested_axis: str) -> str:
+        """按真实数据选择横轴；不存在 Step 时不伪造 Step。"""
+        if requested_axis != "auto":
+            return requested_axis
+        if metric.get("step_point_count", 0) > 0:
+            return "global_step"
+        if metric.get("epoch_point_count", 0) > 0:
+            return "epoch"
+        if metric.get("time_point_count", 0) > 0:
+            return "timestamp"
+        return "global_step"
+
+    def _activity_for(self, status: str, last_metric_at: str | None) -> str:
+        """活动是“最近是否有新数据”的证据，不等于训练进程仍然存在。"""
+        if status in TERMINAL_STATUSES:
+            return "finished"
+        if not last_metric_at:
+            return "unknown"
+        try:
+            age = self._now().timestamp() - epoch_seconds_from_iso(last_metric_at)
+        except ValueError:
+            return "unknown"
+        return "updating" if age <= 120 else "idle"
 
     def _match_metric_key(self, available: list[dict], key: str) -> dict | None:
         exact = [item for item in available if item["key"] == key]
@@ -799,6 +842,7 @@ class IndexQueries:
             "direction": metric["direction"],
             "definition": metric["definition"],
             "definition_key": metric["definition_key"],
+            "axis": axis,
             "points": sampled,
             "total_points": len(points),
             "returned_points": len(sampled),
@@ -858,10 +902,10 @@ class IndexQueries:
         self,
         run_ids: list[str],
         series_keys: list[str],
-        axis: str = "global_step",
+        axis: str = "auto",
         max_points: int = 1500,
     ) -> dict:
-        if axis not in VALID_AXES:
+        if axis not in AXIS_REQUESTS:
             raise ValueError(f"不支持的横轴：{axis}")
         run_ids = list(dict.fromkeys(run_ids))
         if not run_ids:
@@ -947,6 +991,24 @@ class IndexQueries:
         axis: str,
         max_points: int,
     ) -> dict:
+        matches = {
+            row["run_id"]: self._match_metric_key(metric_maps[row["run_id"]], key)
+            for row in run_rows
+        }
+        matches = {run_id: match for run_id, match in matches.items() if match is not None}
+        resolved_axis = axis
+        if axis == "auto":
+            step_total = sum(match["step_point_count"] for match in matches.values())
+            epoch_total = sum(match["epoch_point_count"] for match in matches.values())
+            time_total = sum(match["time_point_count"] for match in matches.values())
+            if step_total == 0 and epoch_total == 0 and time_total == 0:
+                resolved_axis = "global_step"
+            elif step_total >= max(epoch_total, time_total):
+                resolved_axis = "global_step"
+            elif epoch_total >= time_total:
+                resolved_axis = "epoch"
+            else:
+                resolved_axis = "timestamp"
         runs = []
         warnings: list[dict] = []
         units: set[str] = set()
@@ -956,7 +1018,7 @@ class IndexQueries:
         tasks: set[str | None] = set()
         base_metric = None
         for row in run_rows:
-            match = self._match_metric_key(metric_maps[row["run_id"]], key)
+            match = matches.get(row["run_id"])
             if match is None:
                 warnings.append(
                     {
@@ -967,11 +1029,25 @@ class IndexQueries:
                 )
                 continue
             base_metric = base_metric or match
-            payload = self._series_payload(connection, row["run_id"], match, axis, max_points)
+            payload = self._series_payload(
+                connection, row["run_id"], match, resolved_axis, max_points
+            )
+            if not payload["points"]:
+                warnings.append(
+                    {
+                        "code": "axis_partial_coverage",
+                        "severity": "warning",
+                        "message": (
+                            f"运行“{row['name']}”在{self._axis_label(resolved_axis)}横轴上没有该指标；"
+                            "不会伪造或插值其它横轴的数据。"
+                        ),
+                    }
+                )
             runs.append(
                 {
                     "run_id": row["run_id"],
                     "name": row["name"],
+                    "axis": resolved_axis,
                     "points": payload["points"],
                     "total_points": payload["total_points"],
                     "returned_points": payload["returned_points"],
@@ -1072,6 +1148,7 @@ class IndexQueries:
             "unit": base_metric["unit"] if base_metric else None,
             "direction": base_metric["direction"] if base_metric else None,
             "definition": base_metric["definition"] if base_metric else None,
+            "axis": resolved_axis,
             "runs": runs,
             "warnings": warnings,
             "ranking_allowed": ranking_allowed,
@@ -1392,6 +1469,22 @@ class IndexQueries:
             }
             for row in rows
         ]
+
+    def get_saved_view(self, view_id: int) -> dict | None:
+        with self.database.connection() as connection:
+            row = connection.execute(
+                "SELECT id, name, view_kind, payload_json, created_at FROM saved_views WHERE id = ?",
+                (view_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row["id"],
+            "name": row["name"],
+            "view_kind": row["view_kind"],
+            "payload": json.loads(row["payload_json"]),
+            "created_at": row["created_at"],
+        }
 
     def create_saved_view(self, name: str, view_kind: str, payload: dict) -> dict:
         with self.database.transaction() as connection:

@@ -1,7 +1,7 @@
 import type {
   Artifact,
   ArtifactGroup,
-  Axis,
+  AxisRequest,
   CompareRequest,
   CompareResult,
   Diagnostics,
@@ -79,7 +79,7 @@ function queryString(params: Record<string, string | number | boolean | undefine
 
 export interface ExportOptions {
   series: string[];
-  axis: Axis;
+  axis: AxisRequest;
   format: "csv" | "json";
   maxPoints?: number;
   smoothingMethod?: SmoothingMethod;
@@ -115,7 +115,7 @@ export const api = {
     request<{ run_id: string; metric_keys: MetricKey[] }>(
       `/runs/${encodeURIComponent(runId)}/metric-keys`,
     ),
-  metrics: (runId: string, series: string[], axis: Axis, maxPoints = 2000) =>
+  metrics: (runId: string, series: string[], axis: AxisRequest, maxPoints = 2000) =>
     request<MetricQueryResult>(
       `/runs/${encodeURIComponent(runId)}/metrics${queryString({ series, axis, max_points: maxPoints })}`,
     ),
@@ -144,6 +144,7 @@ export const api = {
     request<TablePreview>(`/artifacts/${artifactId}/table-preview`),
   diagnostics: () => request<Diagnostics>("/diagnostics"),
   roots: () => request<{ roots: RootDirectory[] }>("/roots"),
+  selectRootDirectory: () => request<{ path: string }>("/roots/select", { method: "POST" }),
   addRoot: (path: string) =>
     request<RootDirectory>("/roots", {
       method: "POST",
@@ -158,6 +159,7 @@ export const api = {
       { method: "PUT", body: JSON.stringify(patch) },
     ),
   savedViews: () => request<{ saved_views: SavedView[] }>("/saved-views"),
+  savedView: (viewId: number) => request<SavedView>(`/saved-views/${viewId}`),
   createSavedView: (payload: { name: string; view_kind: string; payload: Record<string, unknown> }) =>
     request<SavedView>("/saved-views", { method: "POST", body: JSON.stringify(payload) }),
   deleteSavedView: (viewId: number) =>

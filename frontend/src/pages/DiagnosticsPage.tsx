@@ -4,6 +4,7 @@ import { useApi } from "../hooks/useApi";
 import { useLiveVersion } from "../live/LiveUpdates";
 import type { Severity } from "../types";
 import { formatNumber, statusLabel } from "../utils/format";
+import { RootDirectoriesPanel } from "../components/RootDirectoriesPanel";
 import {
   EmptyState,
   ErrorBlock,
@@ -51,14 +52,18 @@ export function DiagnosticsPage() {
   return (
     <div className="page diagnostics-page">
       <PageHeader
-        title="诊断"
-        subtitle="日志解析、目录扫描、run_id 冲突与运行状态的可追踪信息。这里不会修改原始实验数据。"
+        title="设置与诊断"
+        subtitle="管理日志目录与来源，检查日志解析、run_id 冲突与运行状态。这里不会修改原始实验数据。"
         actions={
           <button type="button" className="button" onClick={handleRescan} disabled={busy}>
             {busy ? "扫描中…" : "立即重新扫描"}
           </button>
         }
       />
+
+      <Panel title="日志目录与来源">
+        <RootDirectoriesPanel />
+      </Panel>
 
       {message ? <p className="notice">{message}</p> : null}
       {diagnostics.error ? (

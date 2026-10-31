@@ -8,7 +8,8 @@
 | 运行元数据读取器 | `RunMetadataReader` | `run_metadata.py` | 读取并校验 `run.json`，不写回 |
 | CSV 指标日志读取器 | `CsvMetricLogReader` | `log_readers/csv_metric_reader.py` | 按显式映射或数值列读取 CSV 指标 |
 | TensorBoard 事件读取器 | `TensorBoardEventReader` | `log_readers/tensorboard_event_reader.py` | 用官方实现读取事件文件中的标量 |
-| 日志来源适配器 | `StandardTvlpSourceAdapter` / `TensorBoardSourceAdapter` / `CsvSourceAdapter` | `source_adapters/builtin_adapters.py` | 判断目录属于哪种来源并给出读取器 |
+| 日志来源适配器 | `StandardTvlpSourceAdapter` / `TensorBoardSourceAdapter` / `CsvSourceAdapter` / `GenericLogFileSourceAdapter` | `source_adapters/` | 判断目录属于哪种来源并给出读取器 |
+| 本机系统目录选择器 | `select_directory_with_system_dialog` | `system_directory_picker.py` | 在桌面环境弹出原生目录框，无 GUI 时明确报错 |
 | 运行目录扫描器 | `RunDirectoryScanner` | `discovery/run_directory_scanner.py` | 从根目录递归发现 Run，不跟随符号链接 |
 | 训练指标索引器 | `TrainingMetricIndexer` | `indexing/training_metric_indexer.py` | 增量写入 SQLite、维护游标、去重、推导状态 |
 | 索引查询 | `IndexQueries` | `indexing/index_queries.py` | 提供运行、曲线、对比、产物、诊断查询 |
@@ -19,7 +20,9 @@
 | 训练日志写入器 | `TrainingRunWriter` | `writer.py` | 训练程序侧生成合法的 TVLP Run、指标、事件与产物引用 |
 | 训练 Agent 接入命令 | `attach` / `status` / `stop` | `cli.py` | 后台启动/复用查看器并挂载日志目录，返回 URL |
 | 协议校验器 | `validate_run_directory` | `log_validation.py` | 按 Schema 和路径规则校验一个 Run 目录 |
-| 指标曲线组件 | `MetricChart` | `frontend/src/components/MetricChart.tsx` | 绘制、缩放、平滑与导出曲线 |
+| 指标曲线组件 | `MetricChart` | `frontend/src/components/MetricChart.tsx` | 绘制、缩放、平滑与导出曲线；空数据也保留容器 |
+| 日志根目录面板 | `RootDirectoriesPanel` | `frontend/src/components/RootDirectoriesPanel.tsx` | 输入/系统选择/移除/重新扫描根目录 |
+| 最新产物预览 | `LatestArtifactPreview` | `frontend/src/components/LatestArtifactPreview.tsx` | 运行页顶部展示最新预测样本 |
 | 实验对比页面 | `ComparisonPage` | `frontend/src/pages/ComparisonPage.tsx` | 多运行叠加、Best/Last、超参数差异 |
 | 预测结果对照器 | `PredictionComparisonViewer` | `frontend/src/components/PredictionComparisonViewer.tsx` | 按样本/Epoch 并排或叠加图像 |
 | 实验产物视图插件 | `artifactViews` | `frontend/src/view_plugins/artifactViews.tsx` | 按产物类型选择预览组件 |
@@ -32,6 +35,8 @@
 - [CSV 指标日志读取器](csv-metric-log-reader.md)
 - [TensorBoard 事件读取器](tensorboard-event-reader.md)
 - [日志来源适配器](source-adapters.md)
+- [通用日志文件来源](generic-log-file-source.md)
+- [本机系统目录选择器](system-directory-picker.md)
 - [运行目录扫描器](run-directory-scanner.md)
 - [训练指标索引器](training-metric-indexer.md)
 - [索引查询](index-queries.md)
@@ -43,6 +48,8 @@
 - [训练 Agent 接入命令](cli-agent-attach.md)
 - [协议校验器](log-validator.md)
 - [指标曲线组件](frontend-metric-chart.md)
+- [日志根目录面板](root-directories-panel.md)
+- [最新产物预览](latest-artifact-preview.md)
 - [实验对比页面](frontend-experiment-comparison.md)
 - [预测结果对照器](frontend-prediction-comparison.md)
 - [实验产物视图插件](frontend-artifact-views.md)

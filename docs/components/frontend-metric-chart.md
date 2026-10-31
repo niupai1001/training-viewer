@@ -27,7 +27,7 @@
 |---|---|---|---|
 | 输入 | `title` / `subtitle` | 字符串 | 指标名、单位/方向/定义说明 |
 | 输入 | `lines` | `ChartLine[]` | 每条线包含 id、标签、点、单位 |
-| 输入 | `axis` | `global_step` / `epoch` / `timestamp` | 横轴 |
+| 输入 | `axis` | `global_step` / `epoch` / `timestamp` | 已解析的横轴（自动选择在 API/页面完成） |
 | 输入 | `smoothing` | `none` / `moving_average` / `ema` | 客户端显示平滑 |
 | 输入 | `smoothingWindow` | 2–50 | 平滑窗口 |
 | 输入 | `logScale` | 布尔 | 对数轴；存在非正值时自动回退线性并提示 |
@@ -47,7 +47,7 @@
 3. 平滑开启且“显示原始曲线”时，额外绘制低透明度原始线，并在 tooltip 中忽略原始线。
 4. 计算是否存在非正值；对数轴请求但存在非正值时改用线性轴并显示提示。
 5. 构建 ECharts 配置：数值轴、图例、轴提示、inside + slider 数据缩放、最小/最大分桶后的数据。
-6. 挂载时 `echarts.init`，用 `ResizeObserver` 跟随容器宽度；同组图表 `echarts.connect(group)`。
+6. 图表容器**始终渲染**（空数据用覆盖层），挂载时 `echarts.init`，用 `ResizeObserver` 跟随容器宽度；同组图表 `echarts.connect(group)`。这样数据从空变为非空时不需要重新挂载初始化。
 7. 导出：
    - PNG：Canvas `getDataURL`，2 倍像素比；
    - SVG：临时 SVG 渲染实例生成字符串，Blob 下载。
@@ -66,7 +66,7 @@
 
 ## 和旧实现相比改变了什么
 
-初始实现。首轮验证修正了横轴名称与缩放条重叠的问题（增大底部网格、把名称下移），并增加“多会话分段”和“非正值对数轴回退”提示。
+初始实现。首轮验证修正了横轴名称与缩放条重叠的问题（增大底部网格、把名称下移），并增加“多会话分段”和“非正值对数轴回退”提示。0005 修正了“空数据时容器不挂载、之后数据到来不初始化”的生命周期问题，并用 Vitest 覆盖；`epoch`/`global_step` 轴设置 `minInterval: 1`，避免重复的非整数刻度标签。
 
 ## 如何验证
 

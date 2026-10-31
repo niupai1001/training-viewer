@@ -173,19 +173,19 @@ export function MetricChart({
           </button>
         </div>
       </figcaption>
-      {hasPoints ? (
-        <div
-          ref={containerRef}
-          className="metric-chart-canvas"
-          style={{ height }}
-          role="img"
-          aria-label={`${title} 训练指标曲线`}
-        />
-      ) : (
-        <div className="metric-chart-empty" style={{ height: Math.min(height, 220) }}>
-          {emptyMessage}
-        </div>
-      )}
+      <div
+        ref={containerRef}
+        className="metric-chart-canvas"
+        style={{ height }}
+        role="img"
+        aria-label={`${title} 训练指标曲线`}
+      >
+        {!hasPoints ? (
+          <div className="metric-chart-placeholder" style={{ height }}>
+            {emptyMessage}
+          </div>
+        ) : null}
+      </div>
       {built.requestedLogScale && !built.logScaleApplied ? (
         <p className="chart-note">
           数据中包含 0 或负值，对数轴无法显示；本次已按线性轴绘制。
@@ -195,7 +195,8 @@ export function MetricChart({
         <p className="chart-note">
           图表使用最小-最大分桶抽样（保留每个分桶的极值）；最佳/最终统计仍基于全部原始记录。
         </p>
-      ) : null}      <p className="chart-note">
+      ) : null}
+      <p className="chart-note">
         {axisShortLabel(axis)} 横轴
         {smoothing !== "none"
           ? `；显示为${smoothingLabel(smoothing)}（窗口 ${smoothingWindow}），仅影响显示`
@@ -360,6 +361,7 @@ function buildChartOption({
       nameLocation: "middle",
       nameGap: 36,
       scale: true,
+      minInterval: axis === "timestamp" ? undefined : 1,
       axisLabel: {
         formatter:
           axis === "timestamp"

@@ -53,7 +53,7 @@ const COLUMN_DEFINITIONS = [
   { id: "seed", label: "随机种子" },
   { id: "updated", label: "最近更新" },
   { id: "duration", label: "数据时长" },
-  { id: "primary", label: "主要指标" },
+  { id: "primary", label: "关键指标" },
   { id: "note", label: "备注" },
   { id: "artifacts", label: "产物" },
   { id: "issues", label: "日志问题" },
@@ -61,7 +61,8 @@ const COLUMN_DEFINITIONS = [
 
 const PAGE_SIZE = 50;
 const MAX_COMPARE_RUNS = 12;
-const COLUMN_STORAGE_KEY = "training-viewer.experiment-columns.v1";
+const COLUMN_STORAGE_KEY = "training-viewer.experiment-columns.v2";
+const DEFAULT_VISIBLE_COLUMNS = ["status", "primary", "updated"];
 
 function loadVisibleColumns(): string[] {
   try {
@@ -75,7 +76,7 @@ function loadVisibleColumns(): string[] {
   } catch {
     // 存储不可用时使用默认列。
   }
-  return COLUMN_DEFINITIONS.map((column) => column.id);
+  return DEFAULT_VISIBLE_COLUMNS;
 }
 
 export function ExperimentsPage() {
@@ -221,8 +222,8 @@ export function ExperimentsPage() {
   return (
     <div className="page">
       <PageHeader
-        title="实验管理"
-        subtitle="按项目、实验组、状态、模型或数据集筛选运行；选中多个运行可直接进入对比。"
+        title="实验库"
+        subtitle="按最近更新查看、筛选和对比训练运行；默认只显示最常用的几列，更多列在“列设置”中。"
         actions={
           <div className="header-actions">
             <div className="column-picker-wrapper">
@@ -268,6 +269,15 @@ export function ExperimentsPage() {
       />
 
       <div className="filter-bar">
+        <label className="filter-search">
+          搜索
+          <input
+            type="search"
+            value={searchInput}
+            placeholder="名称、run_id、项目、模型…"
+            onChange={(event) => setSearchInput(event.target.value)}
+          />
+        </label>
         <label>
           项目
           <select value={filters.project} onChange={(event) => updateFilter("project", event.target.value)}>
@@ -275,21 +285,6 @@ export function ExperimentsPage() {
             {projects.data?.projects.map((project) => (
               <option key={project.name} value={project.name}>
                 {project.name}（{project.run_count}）
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          实验组
-          <select
-            value={filters.experiment}
-            onChange={(event) => updateFilter("experiment", event.target.value)}
-            disabled={!filters.project}
-          >
-            <option value="">全部实验组</option>
-            {experimentOptions.map((experiment) => (
-              <option key={experiment.name ?? "ungrouped"} value={experiment.name ?? ""}>
-                {experiment.name ?? "未分组"}（{experiment.run_count}）
               </option>
             ))}
           </select>
@@ -305,67 +300,6 @@ export function ExperimentsPage() {
             ))}
           </select>
         </label>
-        <label>
-          标签
-          <select value={filters.tag} onChange={(event) => updateFilter("tag", event.target.value)}>
-            <option value="">全部标签</option>
-            {facets.data?.tags.map((tag) => (
-              <option key={tag} value={tag}>
-                {tag}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          模型
-          <select value={filters.model} onChange={(event) => updateFilter("model", event.target.value)}>
-            <option value="">全部模型</option>
-            {facets.data?.models.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          数据集
-          <select value={filters.dataset} onChange={(event) => updateFilter("dataset", event.target.value)}>
-            <option value="">全部数据集</option>
-            {facets.data?.datasets.map((dataset) => (
-              <option key={dataset} value={dataset}>
-                {dataset}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          任务
-          <select value={filters.task} onChange={(event) => updateFilter("task", event.target.value)}>
-            <option value="">全部任务</option>
-            {facets.data?.tasks.map((task) => (
-              <option key={task} value={task}>
-                {task}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="filter-check">
-          <input
-            type="checkbox"
-            checked={filters.favorite}
-            onChange={(event) => updateFilter("favorite", event.target.checked)}
-          />
-          只看收藏
-        </label>
-        <label className="filter-search">
-          搜索
-          <input
-            type="search"
-            value={searchInput}
-            placeholder="名称、run_id、项目、模型…"
-            onChange={(event) => setSearchInput(event.target.value)}
-          />
-        </label>
         {hasActiveFilters ? (
           <button
             type="button"
@@ -378,6 +312,78 @@ export function ExperimentsPage() {
             清除筛选
           </button>
         ) : null}
+        <details className="advanced-filters">
+          <summary>高级筛选（实验组、标签、模型、数据集、任务、收藏）</summary>
+          <div className="advanced-filter-fields">
+            <label>
+              实验组
+              <select
+                value={filters.experiment}
+                onChange={(event) => updateFilter("experiment", event.target.value)}
+                disabled={!filters.project}
+              >
+                <option value="">全部实验组</option>
+                {experimentOptions.map((experiment) => (
+                  <option key={experiment.name ?? "ungrouped"} value={experiment.name ?? ""}>
+                    {experiment.name ?? "未分组"}（{experiment.run_count}）
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              标签
+              <select value={filters.tag} onChange={(event) => updateFilter("tag", event.target.value)}>
+                <option value="">全部标签</option>
+                {facets.data?.tags.map((tag) => (
+                  <option key={tag} value={tag}>
+                    {tag}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              模型
+              <select value={filters.model} onChange={(event) => updateFilter("model", event.target.value)}>
+                <option value="">全部模型</option>
+                {facets.data?.models.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              数据集
+              <select value={filters.dataset} onChange={(event) => updateFilter("dataset", event.target.value)}>
+                <option value="">全部数据集</option>
+                {facets.data?.datasets.map((dataset) => (
+                  <option key={dataset} value={dataset}>
+                    {dataset}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              任务
+              <select value={filters.task} onChange={(event) => updateFilter("task", event.target.value)}>
+                <option value="">全部任务</option>
+                {facets.data?.tasks.map((task) => (
+                  <option key={task} value={task}>
+                    {task}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="filter-check">
+              <input
+                type="checkbox"
+                checked={filters.favorite}
+                onChange={(event) => updateFilter("favorite", event.target.checked)}
+              />
+              只看收藏
+            </label>
+          </div>
+        </details>
       </div>
 
       {selected.length > 0 ? (
@@ -443,13 +449,13 @@ export function ExperimentsPage() {
                   {visibleColumns.includes("model") ? <th scope="col">模型</th> : null}
                   {visibleColumns.includes("dataset") ? <th scope="col">数据集</th> : null}
                   {visibleColumns.includes("seed") ? <th scope="col">随机种子</th> : null}
+                  {visibleColumns.includes("primary") ? <th scope="col">关键指标</th> : null}
                   {visibleColumns.includes("updated") ? (
                     <th scope="col" className="sortable" onClick={() => toggleSort("last_updated_at")}>
                       最近更新{sortIndicator("last_updated_at")}
                     </th>
                   ) : null}
                   {visibleColumns.includes("duration") ? <th scope="col">数据时长</th> : null}
-                  {visibleColumns.includes("primary") ? <th scope="col">主要指标</th> : null}
                   {visibleColumns.includes("note") ? <th scope="col">备注</th> : null}
                   {visibleColumns.includes("artifacts") ? <th scope="col">产物</th> : null}
                   {visibleColumns.includes("issues") ? <th scope="col">日志问题</th> : null}
@@ -490,6 +496,16 @@ export function ExperimentsPage() {
                         >
                           {run.name}
                         </a>
+                        <button
+                          type="button"
+                          className="button button-small quick-compare-button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleSelection(run.run_id);
+                          }}
+                        >
+                          {selected.includes(run.run_id) ? "已选对比" : "+ 对比"}
+                        </button>
                       </div>
                       {run.tags.length > 0 ? (
                         <div className="tag-row">
@@ -507,6 +523,9 @@ export function ExperimentsPage() {
                     {visibleColumns.includes("status") ? (
                       <td>
                         <StatusBadge status={run.status} label={run.status_label} reason={run.status_reason} />
+                        <span className={`activity-badge activity-${run.activity}`} title={run.status_reason}>
+                          {run.activity_label}
+                        </span>
                         {!run.directory_available ? <WarnBadge label="目录不可访问" /> : null}
                         {run.conflict ? <WarnBadge label="run_id 冲突" /> : null}
                       </td>
@@ -532,14 +551,6 @@ export function ExperimentsPage() {
                       </td>
                     ) : null}
                     {visibleColumns.includes("seed") ? <td>{run.seed ?? "—"}</td> : null}
-                    {visibleColumns.includes("updated") ? (
-                      <td title={formatDateTime(run.last_updated_at)}>
-                        {formatRelativeTime(run.last_updated_at)}
-                      </td>
-                    ) : null}
-                    {visibleColumns.includes("duration") ? (
-                      <td>{formatDuration(run.duration_seconds)}</td>
-                    ) : null}
                     {visibleColumns.includes("primary") ? (
                       <td>
                         {run.primary_metric ? (
@@ -555,6 +566,14 @@ export function ExperimentsPage() {
                           <span className="muted">—</span>
                         )}
                       </td>
+                    ) : null}
+                    {visibleColumns.includes("updated") ? (
+                      <td title={formatDateTime(run.last_updated_at)}>
+                        {formatRelativeTime(run.last_updated_at)}
+                      </td>
+                    ) : null}
+                    {visibleColumns.includes("duration") ? (
+                      <td>{formatDuration(run.duration_seconds)}</td>
                     ) : null}
                     {visibleColumns.includes("note") ? (
                       <td className="note-cell" title={run.note}>

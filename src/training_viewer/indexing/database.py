@@ -11,7 +11,7 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS watched_roots (
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS metric_points (
     source_file TEXT NOT NULL,
     source_offset INTEGER NOT NULL,
     line_number INTEGER,
-    UNIQUE(run_id, source_file, source_offset, metric_name)
+    UNIQUE(run_id, source_file, source_offset, phase, metric_name)
 );
 CREATE INDEX IF NOT EXISTS idx_metric_points_series
     ON metric_points(run_id, phase, metric_name, global_step);
@@ -186,8 +186,63 @@ class IndexDatabase:
                     f"索引数据库版本 {current_version} 高于本程序支持的 {SCHEMA_VERSION}；"
                     "请升级 Training Viewer，或删除索引数据库后重建。"
                 )
+            has_metric_points = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='metric_points'"
+            ).fetchone()
+            if has_metric_points and current_version < 2:
+                self._migrate_metric_points_phase_key(connection)
             connection.executescript(SCHEMA_SQL)
             connection.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+
+    @staticmethod
+    def _migrate_metric_points_phase_key(connection) -> None:
+        """v1 → v2：同一步骤/同一行内的不同 phase 可以拥有同名指标。
+
+        v1 的唯一键漏了 phase，导致文本/CSV 同一行的 train_loss 与 val_loss
+        只有一个能入库。这里重建指标表并保留全部旧数据。
+        """
+        connection.executescript(
+            """
+            DROP INDEX IF EXISTS idx_metric_points_series;
+            DROP INDEX IF EXISTS idx_metric_points_epoch;
+            DROP INDEX IF EXISTS idx_metric_points_time;
+            DROP INDEX IF EXISTS idx_metric_points_run_id;
+            ALTER TABLE metric_points RENAME TO metric_points_v1;
+            CREATE TABLE metric_points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+                phase TEXT NOT NULL,
+                metric_name TEXT NOT NULL,
+                global_step INTEGER,
+                epoch INTEGER,
+                timestamp TEXT,
+                session_id TEXT,
+                value REAL NOT NULL,
+                event_id TEXT,
+                source_file TEXT NOT NULL,
+                source_offset INTEGER NOT NULL,
+                line_number INTEGER,
+                UNIQUE(run_id, source_file, source_offset, phase, metric_name)
+            );
+            INSERT OR IGNORE INTO metric_points (
+                run_id, phase, metric_name, global_step, epoch, timestamp,
+                session_id, value, event_id, source_file, source_offset, line_number
+            )
+            SELECT
+                run_id, phase, metric_name, global_step, epoch, timestamp,
+                session_id, value, event_id, source_file, source_offset, line_number
+            FROM metric_points_v1;
+            DROP TABLE metric_points_v1;
+            CREATE INDEX idx_metric_points_series
+                ON metric_points(run_id, phase, metric_name, global_step);
+            CREATE INDEX idx_metric_points_epoch
+                ON metric_points(run_id, phase, metric_name, epoch);
+            CREATE INDEX idx_metric_points_time
+                ON metric_points(run_id, timestamp);
+            CREATE INDEX idx_metric_points_run_id ON metric_points(run_id, id);
+            PRAGMA user_version=2;
+            """
+        )
 
     @contextmanager
     def connection(self):

@@ -7,6 +7,10 @@ const SOURCE_KIND_LABELS: Record<string, string> = {
   tvlp: "标准训练日志（TVLP 1.0）",
   tensorboard: "TensorBoard 事件文件",
   csv: "CSV 指标表",
+  "generic-csv": "通用 CSV 文件",
+  "generic-tsv": "通用 TSV 文件",
+  "generic-jsonl": "通用 JSONL 文件",
+  "plain-text": "普通文本训练日志",
 };
 
 export function RunConfigTab({ run }: { run: RunDetail }) {

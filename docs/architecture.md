@@ -58,12 +58,15 @@ Training Viewer 是本机日志消费者，不是训练调度器：
 | 中文功能名 | 代码名 | 源文件 | 输入 → 输出 |
 |---|---|---|---|
 | 运行目录扫描器 | `RunDirectoryScanner` | `discovery/run_directory_scanner.py` | 根目录 → 发现的 Run + 目录级问题 |
-| 日志来源注册表 | `SourceAdapterRegistry` | `source_adapters/base.py` | 目录 → 第一个匹配的来源适配器 |
+| 日志来源注册表 | `SourceAdapterRegistry` | `source_adapters/base.py` | 目录 → 第一个匹配来源的一批 Run |
 | 标准训练日志来源 | `StandardTvlpSourceAdapter` | `source_adapters/builtin_adapters.py` | 含 run.json 的目录 → Run + 日志文件读取器 |
 | TensorBoard 来源 | `TensorBoardSourceAdapter` | 同上 | 事件文件目录 → 合成元数据的 Run |
 | CSV 指标来源 | `CsvSourceAdapter` | 同上 | `metrics.csv` 目录 → 合成元数据的 Run |
+| 通用日志文件来源 | `GenericLogFileSourceAdapter` | `source_adapters/generic_log_file_adapter.py` | 任意文件名 CSV/TSV/JSONL/文本 → 每文件一个 Run |
 | 标准训练日志增量读取器 | `StandardTrainingLogReader` | `log_readers/standard_training_log_reader.py` | JSONL + 游标 → 指标/事件/产物记录 |
-| CSV 指标日志读取器 | `CsvMetricLogReader` | `log_readers/csv_metric_reader.py` | CSV + 列映射 → 指标记录 |
+| CSV 指标日志读取器 | `CsvMetricLogReader` | `log_readers/csv_metric_reader.py` | CSV + 列映射/分隔符 → 指标记录 |
+| 通用 JSONL 读取器 | `GenericJsonlMetricReader` | `log_readers/generic_jsonl_reader.py` | 扁平/类 TVLP JSONL → 指标记录 |
+| 纯文本日志读取器 | `PlainTextLogReader` | `log_readers/plain_text_log_reader.py` | 规则模板文本 → 指标记录 |
 | TensorBoard 事件读取器 | `TensorBoardEventReader` | `log_readers/tensorboard_event_reader.py` | 事件文件 + 游标 → 标量记录 |
 | 运行元数据读取器 | `RunMetadataReader` | `run_metadata.py` | `run.json` → 校验后的元数据字典 |
 | 训练指标索引器 | `TrainingMetricIndexer` | `indexing/training_metric_indexer.py` | 发现结果 → SQLite 索引与状态 |
@@ -99,7 +102,7 @@ Training Viewer 是本机日志消费者，不是训练调度器：
 
 关键索引：`(run_id, phase, metric_name, global_step)`、`(run_id, phase, metric_name, epoch)`、`(run_id, timestamp)`、`(project, experiment)`、`(run_id, tag)`、`(run_id, group_id)`。
 
-**幂等键**：指标 `(run_id, source_file, source_offset, metric_name)`；产物/事件 `(run_id, source_file, source_offset)`。因此重复扫描、查看器重启、文件重读都不会产生重复采样。
+**幂等键**：指标 `(run_id, source_file, source_offset, phase, metric_name)`（同一行的 train_loss 与 val_loss 可共存）；产物/事件 `(run_id, source_file, source_offset)`。因此重复扫描、查看器重启、文件重读都不会产生重复采样。v1 数据库启动时自动迁移到该键。
 
 ## 5. 增量读取与一致性
 
@@ -129,11 +132,12 @@ Training Viewer 是本机日志消费者，不是训练调度器：
 
 ## 6. 运行状态推导
 
-状态值：`running`、`completed`、`failed`、`cancelled`、`unknown`、`imported`。
+状态值：`running`、`completed`、`failed`、`cancelled`、`unknown`、`imported`。另有独立的 `activity`：`updating`、`idle`、`finished`、`unknown`。
 
-- 非 TVLP 来源（TensorBoard/CSV）没有生命周期事件，显示 `imported`（已导入）。
+- 非 TVLP 来源（TensorBoard/CSV/通用文件）没有生命周期事件，显示 `imported`（已导入）；活动可能仍是“最近仍在更新”。
 - TVLP：取最新 lifecycle 事件。`completed`/`failed`/`cancelled` 直接采用。
-- 否则，若最近 120 秒内有心跳或新指标 → `running`。
+- 否则，只有最近 120 秒内收到 **heartbeat** 才显示 `running`。
+- 有近期指标但没有近期心跳：状态 `unknown`，活动 `updating`；不把“日志在写”冒充“进程仍在运行”。
 - 否则 → `unknown`，原因明确写出“日志停止不能证明训练失败”。
 - 会话（`session_id`）用于区分断点续训；同一会话内的 Step 回退记录警告，不同会话之间 Step 重置是正常现象。
 
@@ -149,7 +153,7 @@ Training Viewer 是本机日志消费者，不是训练调度器：
 
 ## 8. 实时推送（SSE）
 
-- `LogUpdateWatcher` 每 2 秒调用 `TrainingViewerService.synchronize()`；watchdog 事件只用于提前唤醒，不能替代轮询。
+- `LogUpdateWatcher` 每 2 秒调用 `TrainingViewerService.synchronize()`；默认只重读已知 Run。完整目录树发现每 300 秒兜底一次，watchdog 的目录创建/移动/删除事件会立即触发全量发现；watchdog 文件事件只提前唤醒，不替代轮询。
 - 同步发现新 Run、新指标、状态变化或诊断变化时，`version` 增长，并向所有订阅者推送轻量消息 `{version, changed_runs, diagnostics_changed}`。
 - 浏览器通过 `EventSource` 订阅 `/api/v1/stream`；收到消息后合并 600ms 内的多次通知，再按需重新查询 REST。
 - SSE 不广播历史指标数据；断线后浏览器自动重连并重新查询。
@@ -179,6 +183,7 @@ V1 不实现第三方代码热加载。插件异常被记录并跳过，不阻�
 | 应用数据目录 | `%LOCALAPPDATA%\TrainingViewer` / `~/.training_viewer` | `ApplicationPaths`，可被 `TRAINING_VIEWER_DATA_DIR` 或 `--data-dir` 覆盖 |
 | 首选端口 | 8765 | `training-viewer open/serve/attach` |
 | 轮询间隔 | 2 秒 | `--interval` |
+| 全量目录发现间隔 | 300 秒 | `TrainingViewerService(full_scan_interval_seconds=...)` |
 | 后台服务健康检查超时 | 25 秒 | `attach` |
 | 运行中判定时限 | 120 秒 | `TrainingMetricIndexer.STALE_AFTER_SECONDS` |
 | 扫描深度上限 | 12 层 | `RunDirectoryScanner(max_depth)` |
@@ -191,7 +196,7 @@ V1 不实现第三方代码热加载。插件异常被记录并跳过，不阻�
 
 - TensorBoard 事件文件每次变化都会从头重读，没有按字节 seek；对超大事件文件需要后续优化。
 - CSV 同样按文件变化整体重读；行游标保证不重复入库。
-- 每 2 秒完整发现一次目录，复杂目录树可能需要调整根目录或轮询间隔；匹配到的 Run 目录不会继续向下扫描产物。
+- 每 2 秒只重读已知 Run；每 300 秒完整发现一次目录树，watchdog 目录事件提前触发。复杂目录树可调整根目录或轮询间隔；匹配到的 Run 目录不会继续向下扫描产物。
 - `attach` 启动的后台服务不会随 Agent 会话退出而停止；需要 `training-viewer stop` 管理。若在受限环境中无法写默认应用数据目录，使用 `--data-dir`。
 - 训练侧写入器只面向单写者；DDP 多进程并发写同一文件不在 V1 保证范围。
 - 前端打包为单个约 942 KiB（gzip 311 KiB）的 JavaScript 文件，包含 ECharts；本地使用无需 CDN，但首次加载体积较大。

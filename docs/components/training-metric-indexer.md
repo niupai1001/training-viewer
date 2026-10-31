@@ -33,7 +33,7 @@
 
 | 表 | 幂等键 |
 |---|---|
-| `metric_points` | `(run_id, source_file, source_offset, metric_name)` |
+| `metric_points` | `(run_id, source_file, source_offset, phase, metric_name)`；v1 库启动时自动迁移 |
 | `artifacts` | `(run_id, source_file, source_offset)` |
 | `training_events` | `(run_id, source_file, source_offset)` |
 | `ingestion_cursors` | `file_path`（主键） |
@@ -53,16 +53,17 @@
 8. **插入记录**：`INSERT OR IGNORE`；产物路径经 `resolve_artifact_path` 校验，越界路径拒绝并记录问题；缺失产物仍保留引用并标记 `exists_on_disk=0`。
 9. **更新游标**：保存文件身份、偏移、行号、大小、mtime、读取时间。
 10. **刷新产物存在性**：最多 2000 个/运行，优先检查缺失项。
-11. **推导状态**：见下节；即使没有新行，`refresh_statuses()` 也会因心跳超时把“运行中”更新为“未知”。
+11. **推导状态**：见下节；即使没有新行，`refresh_statuses()` 也会因心跳超时把“运行中”更新为“未知”。活动 `activity` 由查询层按最后指标时间计算，不写回状态。
 12. **维护问题表**：按哈希去重，最多保留 2000 条。
 
 ## 状态推导
 
 | 条件 | 状态 | 原因文案 |
 |---|---|---|
-| 来源为 TensorBoard/CSV | `imported` | 无生命周期事件 |
+| 来源为 TensorBoard/CSV/通用文件 | `imported` | 无生命周期事件 |
 | 最新 lifecycle 为 completed/failed/cancelled | 对应状态 | 含事件时间 |
-| 最近 120 秒内有心跳或新指标 | `running` | 说明最后活动时间 |
+| 最近 120 秒内有 heartbeat | `running` | 心跳是进程存在的显式证据 |
+| 有近期指标、无近期心跳 | `unknown` | 指标更新不等于进程存在，不能标记运行中 |
 | 有活动但已超时 | `unknown` | “日志停止不能证明训练失败” |
 | 尚无任何事件/指标 | `unknown` | “尚未收到指标、心跳或生命周期事件” |
 

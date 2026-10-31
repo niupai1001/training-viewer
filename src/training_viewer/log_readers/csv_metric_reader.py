@@ -93,8 +93,11 @@ class CsvMetricLogReader:
     adapter_id = "source.csv_metric_log"
     file_kind = "csv"
 
-    def __init__(self, column_mapping: dict | None = None):
+    def __init__(self, column_mapping: dict | None = None, delimiter: str | None = None):
         self.column_mapping = column_mapping or {}
+        self.delimiter = delimiter or ","
+        if self.delimiter not in (",", "\t", ";"):
+            raise ValueError(f"不支持的 CSV 分隔符：{self.delimiter!r}")
         unknown_keys = sorted(set(self.column_mapping) - _KNOWN_COLUMN_KEYS)
         if unknown_keys:
             raise ValueError(f"CSV 列映射含未知配置项：{', '.join(unknown_keys)}")
@@ -183,7 +186,7 @@ class CsvMetricLogReader:
 
         try:
             with file_path.open("r", encoding="utf-8-sig", newline="") as handle:
-                reader = csv.reader(handle)
+                reader = csv.reader(handle, delimiter=self.delimiter)
                 headers = next(reader, None)
                 if headers is None:
                     result.add_issue(str(file_path), 0, "CSV 文件为空", "warning")
@@ -211,7 +214,7 @@ class CsvMetricLogReader:
             for index in range(len(headers)):
                 if index in known:
                     continue
-                if self._column_is_numeric(file_path, index):
+                if self._column_is_numeric(file_path, index, self.delimiter):
                     metric_indexes.append(index)
             metric_names = [headers[index] for index in metric_indexes]
 
@@ -240,7 +243,7 @@ class CsvMetricLogReader:
         reported = 0
         try:
             with file_path.open("r", encoding="utf-8-sig", newline="") as handle:
-                reader = csv.reader(handle)
+                reader = csv.reader(handle, delimiter=self.delimiter)
                 next(reader, None)
                 for row in reader:
                     current_row = row_index
@@ -291,10 +294,13 @@ class CsvMetricLogReader:
                             value = _parse_float(row[metric_index])
                             if value is None:
                                 continue
+                            metric_phase, final_metric_name = _phase_and_metric_name(
+                                phase, metric_name
+                            )
                             result.records.append(
                                 MetricPoint(
-                                    phase=phase,
-                                    metric_name=metric_name,
+                                    phase=metric_phase,
+                                    metric_name=final_metric_name,
                                     value=value,
                                     timestamp=timestamp or None,
                                     global_step=global_step,
@@ -330,12 +336,12 @@ class CsvMetricLogReader:
         return result
 
     @staticmethod
-    def _column_is_numeric(file_path: Path, column_index: int) -> bool:
+    def _column_is_numeric(file_path: Path, column_index: int, delimiter: str = ",") -> bool:
         """判断一列是否全部为非空数字；混合内容列不当作指标。"""
         saw_value = False
         try:
             with file_path.open("r", encoding="utf-8-sig", newline="") as handle:
-                reader = csv.reader(handle)
+                reader = csv.reader(handle, delimiter=delimiter)
                 next(reader, None)
                 for row in reader:
                     if column_index >= len(row) or not row[column_index].strip():
@@ -346,3 +352,27 @@ class CsvMetricLogReader:
         except (OSError, UnicodeDecodeError):
             return False
         return saw_value
+
+
+_PHASE_PREFIXES = {
+    "train": "train",
+    "training": "train",
+    "val": "val",
+    "valid": "val",
+    "validation": "val",
+    "test": "test",
+    "eval": "eval",
+}
+
+
+def _phase_and_metric_name(phase: str, metric_name: str) -> tuple[str, str]:
+    """有阶段列时保留原列名；没有阶段时从 train_/val_ 前缀推导（不伪造指标）。"""
+    if phase != "unlabeled":
+        return phase, metric_name
+    normalized = metric_name.strip()
+    lowered = normalized.lower()
+    for prefix, phase_name in _PHASE_PREFIXES.items():
+        token = f"{prefix}_"
+        if lowered.startswith(token) and len(normalized) > len(token):
+            return phase_name, normalized[len(token):]
+    return phase, metric_name

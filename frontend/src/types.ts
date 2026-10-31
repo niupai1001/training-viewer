@@ -90,6 +90,8 @@ export interface RunSummary {
   status: string;
   status_label: string;
   status_reason: string;
+  activity: string;
+  activity_label: string;
   created_at: string | null;
   last_updated_at: string | null;
   started_at: string | null;
@@ -179,6 +181,8 @@ export interface RunDetail {
   status: string;
   status_label: string;
   status_reason: string;
+  activity: string;
+  activity_label: string;
   created_at: string | null;
   last_updated_at: string | null;
   started_at: string | null;
@@ -236,6 +240,7 @@ export interface SeriesPayload {
   direction: MetricDirection | null;
   definition: string | null;
   definition_key: string | null;
+  axis: Axis;
   points: SeriesPoint[];
   total_points: number;
   returned_points: number;
@@ -248,17 +253,19 @@ export interface SeriesPayload {
 export interface MetricQueryResult {
   run_id: string;
   run_name: string;
-  axis: Axis;
+  axis: AxisRequest;
   series: SeriesPayload[];
   warnings: WarningItem[];
 }
 
 export type Axis = "global_step" | "epoch" | "timestamp";
+export type AxisRequest = Axis | "auto";
 export type SmoothingMethod = "none" | "moving_average" | "ema";
 
 export interface CompareRunSeries {
   run_id: string;
   name: string;
+  axis: Axis;
   points: SeriesPoint[];
   total_points: number;
   returned_points: number;
@@ -276,6 +283,7 @@ export interface CompareSeries {
   unit: string | null;
   direction: MetricDirection | null;
   definition: string | null;
+  axis: Axis;
   runs: CompareRunSeries[];
   warnings: WarningItem[];
   ranking_allowed: boolean;
@@ -300,7 +308,7 @@ export interface HyperparameterRow {
 }
 
 export interface CompareResult {
-  axis: Axis;
+  axis: AxisRequest;
   run_ids: string[];
   series: CompareSeries[];
   runs: CompareRunInfo[];
@@ -402,10 +410,11 @@ export interface SavedView {
   payload: {
     run_ids?: string[];
     series?: string[];
-    axis?: Axis;
+    axis?: AxisRequest;
     smoothing?: SmoothingMethod;
     smoothing_window?: number;
     scale?: string;
+    show_raw?: boolean;
   };
   created_at: string;
 }
@@ -480,6 +489,6 @@ export interface RunListQuery {
 export interface CompareRequest {
   run_ids: string[];
   series: string[];
-  axis: Axis;
+  axis: AxisRequest;
   max_points?: number;
 }

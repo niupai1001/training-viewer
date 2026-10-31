@@ -9,7 +9,7 @@
 | 项目 | 内容 |
 |---|---|
 | 中文功能名 | 日志来源适配器 |
-| 代码名 | `StandardTvlpSourceAdapter`、`TensorBoardSourceAdapter`、`CsvSourceAdapter`、`SourceAdapterRegistry` |
+| 代码名 | `StandardTvlpSourceAdapter`、`TensorBoardSourceAdapter`、`CsvSourceAdapter`、`GenericLogFileSourceAdapter`、`SourceAdapterRegistry` |
 | 源文件 | `src/training_viewer/source_adapters/builtin_adapters.py`、`source_adapters/base.py` |
 | 所属模块 | 日志来源 |
 | 上游 | `RunDirectoryScanner`；下游 | 读取器与 `TrainingMetricIndexer` |
@@ -30,7 +30,7 @@
 | 输出异常 | `InvalidRunDirectoryError` | 异常 | `run.json` 存在但非法 | 扫描器记录目录问题并停止向下扫描 |
 | 输出异常 | `ReaderUnavailableError` | 异常 | 例如缺少 tensorboard | 扫描器记录安装提示 |
 
-## 三个内置来源
+## 四个内置来源
 
 ### 标准训练日志来源（StandardTvlpSourceAdapter）
 
@@ -56,12 +56,19 @@
 
 - 条件：存在 `metrics.csv`、没有 `run.json`、没有 TensorBoard 事件文件。
 - 合成身份规则同 TensorBoard，前缀为 `csv-`。
+
+### 通用日志文件来源（GenericLogFileSourceAdapter）
+
+- 条件：没有 `run.json`，目录内直接子文件通过内容嗅探（任意 CSV/TSV/JSONL/`.log`/`.txt`/`.out`）。
+- 每个通过嗅探的文件一个 Run，共享父目录；同一目录可有多个 Run。
+- 纯业务 CSV（如 `name,price,step`）不导入。
+- 详见 [通用日志文件来源](generic-log-file-source.md)。
 - 使用启发式列识别；没有显式映射。
 - `metadata_synthetic=True`。
 
 ## 主要处理流程
 
-1. 注册表按固定优先级遍历适配器：TVLP → TensorBoard → CSV。
+1. 注册表按固定优先级遍历适配器：TVLP → TensorBoard → CSV → 通用文件。
 2. 第一个返回非 `None` 的适配器胜出；扫描器不再向该目录的产物目录下钻。
 3. 适配器构造 `LogFileSpec` 列表，把文件路径与对应读取器实例绑定。
 4. 索引器为每个文件读取游标并写入统一表；不需要知道来源格式。
@@ -70,7 +77,7 @@
 
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
-| 注册顺序 | TVLP、TensorBoard、CSV | 决定同一目录的优先级 |
+| 注册顺序 | TVLP、TensorBoard、CSV、通用文件 | 决定同一目录的优先级 |
 | 合成项目名 | 上一级目录名 | 无 run.json 时 |
 | entry point 组 | `training_viewer.source_adapters` | 第三方适配器安装式注册 |
 

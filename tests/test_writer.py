@@ -72,6 +72,27 @@ def test_writer_creates_valid_run_with_metrics_and_artifact(tmp_path: Path) -> N
     assert artifact_event["role"] == "prediction"
 
 
+def test_writer_normalizes_missing_metric_direction(tmp_path: Path) -> None:
+    writer = TrainingRunWriter(
+        log_root=tmp_path / "logs",
+        project="demo",
+        name="directions",
+        metric_definitions={
+            "train/loss": {"direction": None},
+            "train/lr": {},
+        },
+    )
+    assert writer.metric_definitions["train/loss"]["direction"] == "none"
+    assert writer.metric_definitions["train/lr"]["direction"] == "none"
+    with pytest.raises(ValueError):
+        TrainingRunWriter(
+            log_root=tmp_path / "logs",
+            project="demo",
+            name="bad-direction",
+            metric_definitions={"train/loss": {"direction": "up"}},
+        )
+
+
 def test_writer_resume_creates_new_session_and_keeps_metrics(tmp_path: Path) -> None:
     run_directory = tmp_path / "experiments" / "resume-run"
     first = TrainingRunWriter(

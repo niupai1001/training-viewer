@@ -46,6 +46,29 @@ def _write_json_atomic(path: Path, payload: dict) -> None:
     os.replace(temporary, path)
 
 
+def _normalize_metric_definitions(definitions: dict) -> dict:
+    """把省略/None 的 direction 规范成 none，并拒绝非法定义。"""
+    if not isinstance(definitions, dict):
+        raise ValueError("metric_definitions 必须是字典")
+    normalized: dict[str, dict] = {}
+    for key, definition in definitions.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("metric_definitions 的键必须是非空字符串")
+        if not isinstance(definition, dict):
+            raise ValueError(f"metric_definitions[{key}] 必须是字典")
+        item = dict(definition)
+        direction = item.get("direction", "none")
+        if direction is None:
+            direction = "none"
+        if direction not in ("min", "max", "none"):
+            raise ValueError(
+                f"metric_definitions[{key}].direction 必须是 min、max 或 none"
+            )
+        item["direction"] = direction
+        normalized[key] = item
+    return normalized
+
+
 class TrainingRunWriter:
     """把一次训练/评估写成标准 TVLP 1.0 Run。
 
@@ -89,7 +112,7 @@ class TrainingRunWriter:
         self.config = config or {}
         self.source = source or {}
         self.tags = tags or []
-        self.metric_definitions = metric_definitions or {}
+        self.metric_definitions = _normalize_metric_definitions(metric_definitions or {})
         self.session_id = session_id or (
             f"session-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:6]}"
         )

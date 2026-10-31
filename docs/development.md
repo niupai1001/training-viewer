@@ -39,8 +39,21 @@ ruff check src tests --select F,E9
 cd frontend
 npm ci
 npm run typecheck
+npm run test
 npm run dev
 ```
+
+`npm run test` 是 Vitest + Testing Library 组件测试；`npm run e2e` 用 Playwright Core 调本机 Chrome 对已启动的查看器做真实页面冒烟（默认 `http://127.0.0.1:8799/`，可用 `TRAINING_VIEWER_URL` 覆盖；截图输出到 `.devtools/e2e`）。
+
+性能基准（不进入普通测试）：
+
+```powershell
+python tools/benchmark_viewer.py --points 100000
+python tools/benchmark_viewer.py --points 1000000
+python tools/benchmark_tensorboard.py
+```
+
+结果与限制见 [`docs/performance.md`](performance.md)。
 
 Vite 开发服务器默认 `http://127.0.0.1:5173`，把 `/api` 代理到 `http://127.0.0.1:8765`。另开终端启动后端：
 

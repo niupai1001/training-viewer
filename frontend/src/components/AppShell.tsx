@@ -15,11 +15,9 @@ import { EmptyState } from "./Common";
 type NavigationKey = "overview" | "experiments" | "compare" | "results" | "diagnostics";
 
 const NAV_ITEMS: { key: NavigationKey; label: string; href: string; icon: string }[] = [
-  { key: "overview", label: "总览", href: "#/", icon: "◉" },
-  { key: "experiments", label: "实验管理", href: "#/runs", icon: "▤" },
-  { key: "compare", label: "实验对比", href: "#/compare", icon: "⇄" },
-  { key: "results", label: "预测结果", href: "#/results", icon: "▦" },
-  { key: "diagnostics", label: "诊断", href: "#/diagnostics", icon: "⚠" },
+  { key: "overview", label: "监控", href: "#/", icon: "◉" },
+  { key: "experiments", label: "实验库", href: "#/runs", icon: "▤" },
+  { key: "compare", label: "对比", href: "#/compare", icon: "⇄" },
 ];
 
 export function AppShell({ connected }: { connected: boolean }) {
@@ -102,7 +100,7 @@ export function AppShell({ connected }: { connected: boolean }) {
         <div className="sidebar-footer">
           <div className="root-summary">
             <span>{projects.data?.roots.length ?? 0} 个日志根目录</span>
-            <a href="#/">管理</a>
+            <a href="#/diagnostics">设置与诊断</a>
           </div>
           <p className="muted small">
             {meta.data ? `v${meta.data.version} · TVLP ${meta.data.tvlp_schema_version}` : "Training Viewer"}
@@ -156,7 +154,7 @@ function resolveActiveKey(path: string): NavigationKey {
     return "compare";
   }
   if (path.startsWith("/results")) {
-    return "results";
+    return "experiments";
   }
   if (path.startsWith("/diagnostics")) {
     return "diagnostics";

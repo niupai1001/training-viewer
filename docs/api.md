@@ -17,9 +17,10 @@
 | GET | `/runs/{run_id}/timeline` | 生命周期、心跳与产物事件合并时间线 |
 | GET | `/roots` | 已添加的扫描根目录 |
 | POST | `/roots` | 添加根目录，请求 `{"path": "D:\\experiments"}`；返回 201 |
+| POST | `/roots/select` | 打开本机系统目录选择框，返回 `{"path": "..."}`；无桌面环境返回 501 |
 | DELETE | `/roots/{root_id}` | 移除根目录及其索引；原始文件不删除 |
-| POST | `/rescan` | 立即同步一次，返回版本与发现运行数 |
-| GET | `/saved-views` / POST / DELETE `/saved-views/{id}` | 保存的对比视图 |
+| POST | `/rescan` | 立即全量同步，返回版本与发现运行数 |
+| GET | `/saved-views` / GET `/saved-views/{id}` / POST / DELETE `/saved-views/{id}` | 保存的对比视图；按 id 恢复完整状态 |
 | PUT | `/runs/{run_id}/annotation` | 保存备注/收藏，请求 `{"note": "...", "favorite": true}` |
 | GET | `/diagnostics` | 目录级问题、run_id 冲突、需要关注的运行 |
 
@@ -27,7 +28,9 @@
 
 `project`、`experiment`、`status`、`q`（名称/ID/项目/模型/数据集模糊搜索）、`tag`、`task`、`model`、`dataset`、`favorite`、`sort`（字段前加 `-` 表示降序，默认 `-last_updated_at`）、`limit`（1–1000，默认 200）、`offset`。
 
-运行摘要包含 `primary_metric`：第一个声明 min/max 方向的验证指标；没有方向时退化为最近写入的指标，只显示最终值。
+运行摘要包含 `status`/`status_label`/`status_reason` 与独立的 `activity`/`activity_label`。`activity` 只描述最近是否有新指标（`updating`/`idle`/`finished`/`unknown`），不能当作训练进程存在证明。
+
+运行摘要还包含 `primary_metric`：第一个声明 min/max 方向的验证指标；没有方向时退化为最近写入的指标，只显示最终值。
 
 ### 错误
 
@@ -44,22 +47,23 @@
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/runs/{run_id}/metric-keys` | 指标键、单位、方向、定义、点数、Best/Last |
-| GET | `/runs/{run_id}/metrics?series=val/miou&series=train/loss&axis=global_step&max_points=2000` | 单运行多指标曲线 |
+| GET | `/runs/{run_id}/metrics?series=val/miou&series=train/loss&axis=auto&max_points=2000` | 单运行多指标曲线 |
 | POST | `/compare/query` | 多运行对比 |
 | GET | `/runs/{run_id}/metrics/export?series=...&axis=...&format=csv&smoothing_method=ema&smoothing_window=5&scale=linear` | 下载单运行数据 |
 | POST | `/compare/export` | 下载对比数据 |
 
-`axis` 可为 `global_step`、`epoch`、`timestamp`。时间轴返回 Unix 秒，前端按浏览器本地时区显示。
+`axis` 可为 `global_step`、`epoch`、`timestamp`、`auto`（默认）。`auto` 按每个指标真实存在的字段选择：优先 `global_step`，否则 `epoch`，否则 `timestamp`；不会伪造 Step。时间轴返回 Unix 秒，前端按浏览器本地时区显示。响应中每个 series 带自己的 `axis`。
 
 ### 曲线响应要点
 
 ```json
 {
   "run_id": "...",
-  "axis": "global_step",
+  "axis": "auto",
   "series": [
     {
       "key": "val/miou",
+      "axis": "epoch",
       "phase": "val",
       "metric_name": "miou",
       "unit": "ratio",

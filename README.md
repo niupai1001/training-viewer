@@ -8,9 +8,26 @@
 
 ![总览页面](docs/images/overview.png)
 
-## 让训练 Agent 自动接入（推荐）
+## 已有训练日志：直接打开（零改造）
 
-不需要手动打开服务。把 [`AGENT_INTEGRATION.md`](AGENT_INTEGRATION.md) 完整交给你的训练 Agent，它应当：
+如果训练已经跑过，日志是 TensorBoard 事件文件、CSV/TSV/JSONL，或普通的 `train.log` / `train.txt`，不需要改训练代码，也不需要先接写入器：
+
+```powershell
+training-viewer open D:\experiments\projectA
+```
+
+打开后首页直接显示**最近一次训练**的真实损失/验证指标曲线；没有数据时会明确说明原因，而不是只显示文件夹列表。目录、诊断和协议细节收在“高级设置 / 设置与诊断”中。
+
+支持两类接入方式，按需要选择：
+
+| 场景 | 做法 | 是否需要改训练代码 |
+|---|---|---|
+| 已有日志 | 直接 `training-viewer open <目录>`，或在首页/设置页添加目录 | 不需要 |
+| 新实验、希望状态/心跳/产物更完整 | 使用 `TrainingRunWriter` + `attach`，见下一节 | 需要，但只是可选增强 |
+
+## 新实验：让训练 Agent 自动接入（可选增强）
+
+如果希望查看器能证明“训练进程仍在运行”、记录断点续训会话、统一产物路径，把 [`AGENT_INTEGRATION.md`](AGENT_INTEGRATION.md) 完整交给训练 Agent，它应当：
 
 1. 在训练代码中调用 `TrainingRunWriter`（只依赖 Python 标准库，可用 `pip install training-viewer` 或直接复制 `src/training_viewer/writer.py`）；
 2. 按 TVLP 1.0 生成 `run.json`、`metrics.jsonl`、`events.jsonl` 和 `artifacts/`；
@@ -59,12 +76,15 @@ training-viewer attach D:\runs\my-project --json
 | 功能 | 页面 | 说明 |
 |---|---|---|
 | 项目 / 实验组 / 运行管理 | 实验管理 | 按项目、实验组、状态、模型、数据集、任务、标签、收藏筛选；列显示/隐藏、排序、批量选择 |
-| 实时曲线 | 指标曲线 | 任意数值指标；Step / Epoch / 时间横轴；原始与平滑切换；对数轴；PNG/SVG/CSV/JSON 导出 |
-| 多实验对比 | 实验对比 | 同一指标定义下叠加多个运行；Best/Last；超参数差异；可比较性警告；保存对比视图 |
-| 预测结果对照 | 预测结果 | 按样本和 Epoch 并排显示原图、真实标签、预测；透明度叠加；表格产物预览 |
+| 实时曲线 | 监控 / 指标曲线 | 首页直接显示当前/最近训练的 Loss 与验证指标；按真实数据自动选择优化步或训练轮次，不伪造 Step |
+| 多实验对比 | 对比 | 同一指标定义下叠加多个运行；Best/Last；超参数差异；可比较性警告；保存视图可按 ID 完整恢复 |
+| 预测结果对照 | 运行页 / 预测结果 | 运行页内嵌最新预测样本；完整图库按样本和 Epoch 并排显示原图、真实标签、预测 |
 | 配置与来源 | 配置与来源 | run.json 的模型、数据集、超参数、代码来源、指标定义 |
-| 时间线与诊断 | 时间线 / 诊断 | 生命周期、心跳、产物事件；坏行、缺失产物、Step 回退、状态未知原因 |
-| 日志格式适配 | 日志来源 | 标准 TVLP、TensorBoard 事件文件（可选依赖）、CSV 指标表 |
+| 时间线与诊断 | 时间线 / 设置与诊断 | 生命周期、心跳、产物事件；坏行、缺失产物、Step 回退、状态未知原因；活动与生命周期状态分开显示 |
+| 日志格式适配 | 日志来源 | 标准 TVLP、TensorBoard 事件文件（可选依赖）、CSV 指标表、任意文件名 CSV/TSV/JSONL、普通文本日志 |
+| 插件扩展 | — | 日志来源适配器、导出器、前端产物视图均有显式注册表；第三方来源可通过 Python entry point 安装 |
+| 训练侧接入 | — | `TrainingRunWriter`（仅标准库）、Agent 接入契约、后台 `attach`；仅新实验需要 |
+| 入口 | — | `training-viewer open/serve/validate/attach/status/stop`、实例复用、VS Code 扩展与 VSIX |
 | 插件扩展 | — | 日志来源适配器、导出器、前端产物视图均有显式注册表；第三方来源可通过 Python entry point 安装 |
 | 训练侧接入 | — | `TrainingRunWriter`（仅标准库）、Agent 接入契约、后台 `attach` |
 | 入口 | — | `training-viewer open/serve/validate/attach/status/stop`、实例复用、VS Code 扩展与 VSIX |
@@ -116,18 +136,20 @@ training-viewer open examples
 training-viewer open D:\experiments\projectA D:\experiments\projectB
 ```
 
-查看器递归查找 `run.json`（以及可识别的 TensorBoard / CSV 目录），不要求固定的 `project/run` 物理层级。目录中的文件始终只读。
+查看器递归查找 `run.json`，也会对任意命名的 CSV/TSV/JSONL、`*.log`/`*.txt` 做内容嗅探；不要求固定的 `project/run` 物理层级。目录中的文件始终只读。普通文本日志需要明确写出 Step/Epoch 和指标键值，复杂格式请先生成 CSV/TSV 或标准 TVLP。
 
 如果实例已在运行，`training-viewer open` 会复用同一个实例、只添加新目录，不会启动第二个服务。
 
 ## 使用流程
 
-1. **添加日志根目录**：总览页输入绝对路径，或用 CLI / VS Code 选择目录。
-2. **实时查看**：训练程序持续追加 `metrics.jsonl` / `events.jsonl`；后台每 2 秒轮询，并在 watchdog 可用时用文件事件提前唤醒。
-3. **筛选实验**：实验管理页按项目、实验组、状态、模型、数据集、任务、标签筛选，收藏或写备注。
-4. **查看单次运行**：曲线、配置、产物、时间线、诊断五个标签页。
-5. **对比多个实验**：勾选运行 → “实验对比” → 选择指标、横轴、平滑；查看 Best/Last、超参数差异与可比性警告；可保存视图。
-6. **查看预测结果**：选择运行与产物标签，按样本、Epoch 切换并排或叠加视图。
+1. **添加日志根目录**：在首页点“打开训练目录”，可粘贴路径或选择本机目录；也可用 CLI / VS Code。目录会记住，`training-viewer open` 不带参数时恢复上次工作区。
+2. **先看曲线**：首页自动选最近/活跃运行，显示损失与验证指标；训练程序持续追加时后台每 2 秒增量读取，watchdog 目录事件触发重新发现。
+3. **筛选实验**：实验库默认只显示名称、状态、关键指标、最近更新；实验组、标签、模型等放在“高级筛选”。
+4. **查看单次运行**：自动选择 Train Loss、Val Loss 和验证主指标；曲线、配置、产物、时间线、诊断五个标签页。
+5. **对比多个实验**：点运行行的“+ 对比”或多选；“加入对比”会带同数据集运行；可保存视图并从名称或 ID 恢复完整设置。
+6. **查看预测结果**：运行页先显示最新预测样本；完整图库从“预测结果”入口进入。
+
+![实验库](docs/images/experiments.png)
 
 ![运行详情](docs/images/run-detail.png)
 
@@ -225,7 +247,7 @@ python -m pip install "training-viewer[tensorboard]"
 - **路径白名单**：产物只允许 Run 目录内的相对路径；拒绝绝对路径、`..` 穿越和指向外部的符号链接。
 - **不可信内容隔离**：HTML/SVG 产物按纯文本附件返回，不在查看器内执行脚本；模型文件只提供元数据与下载，不反序列化。
 - **实时一致性**：字节/行/事件游标增量读取；末尾半行等待补齐；截断、替换、轮转时重建该文件索引；同一 Step 的 train/val 不视为重复。
-- **状态语义**：没有 `completed` 事件且超过 120 秒没有心跳或新指标时显示“状态未知（可能中断）”，不会仅因日志停止判定失败。
+- **状态语义**：只有近期 heartbeat 才显示“运行中”；有近期指标但没有心跳时显示“状态未知”并单独标记“最近仍在更新”。没有 `completed` 事件且超过 120 秒无活动时不会仅因日志停止判定失败。
 - **可比性**：单位、数据集版本/划分、指标定义或任务类型不同时明确提示不可直接比较；不同运行之间不插值。
 
 ## 示例数据
@@ -259,7 +281,9 @@ npm run build
 
 构建产物输出到 `src/training_viewer/web/`，并随 Python 包一起安装。开发前端时可以运行 `npm run dev`（Vite 端口 5173，代理 `/api` 到 8765），同时用 `training-viewer serve` 启动后端。
 
-测试覆盖：完整行/半行/坏行、截断重建、重复导入、断点续训、状态推导、同 Step 多阶段、CSV 映射、TensorBoard 标量、run_id 冲突、目录移动、降采样与原始 Best/Last、产物路径穿越、Host/Origin 校验、导出、CLI 校验、训练写入器与恢复会话。当前结果：**68 通过，2 跳过**（跳过的是 Windows 环境不允许创建符号链接的用例）。
+测试覆盖：完整行/半行/坏行、截断重建、重复导入、断点续训、状态/活动分离、同 Step 多阶段、自动横轴、CSV 映射、TensorBoard 标量、任意 CSV/TSV/JSONL/文本、run_id 冲突、目录移动、增量扫描、降采样与原始 Best/Last、产物路径穿越、Host/Origin 校验、导出、CLI 校验、训练写入器与恢复会话。当前结果：**76 通过，2 跳过**（跳过的是 Windows 环境不允许创建符号链接的用例）。
+
+前端另有两个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 覆盖监控/实验库/运行详情/对比。百万点与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
 
 ## 已知限制
 
@@ -271,10 +295,13 @@ npm run build
 - 同一 JSONL 文件被多个进程并发追加的保证；推荐只由 rank 0 写入。
 - 第三方代码热加载；第三方来源/导出器通过显式注册或 Python entry point 安装，前端视图插件需要重新构建前端。
 - 模型文件反序列化、HTML 产物脚本执行。
-- 训练 Agent 需要修改训练代码并生成真实指标；查看器不会从任意日志猜测指标语义。
+- 训练 Agent 需要修改训练代码并生成真实指标（仅新实验增强模式；已有日志可直接导入，不要求改代码）。
+- 普通文本日志只支持规则模板能明确识别的 Step/Epoch + 指标键值；歧义 CSV 还没有持久化人工字段映射界面。
+- TensorBoard 仍从事件文件开头遍历并跳过已消费序号，不是真正的字节 seek；十万级以上事件文件未验证。
+- 本版本只在 Windows 实机复验；macOS/Linux 的目录选择框、watchdog 与路径差异未独立验证。
 - 训练环境与查看器环境默认分离：`attach` 在查看器所在机器执行；跨机器场景只完成日志写入，由本机挂载。
 
-性能上，曲线查询使用最小-最大分桶降采样（保留极值），Best/Last 始终基于全量原始记录。大规模数据（百万级点）尚未做基准测试与视窗分页优化。
+性能上，曲线查询使用最小-最大分桶降采样（保留极值），Best/Last 始终基于全量原始记录。10 万点以内交互可用；100 万点索引约 33 秒、查询约 9.4 秒，尚未做数据库端预聚合或视窗分页（见 [`docs/performance.md`](docs/performance.md)）。
 
 ## 文档与术语
 
@@ -289,6 +316,7 @@ npm run build
 - [第三方许可证与依赖](docs/third-party-licenses.md)
 - [VS Code 扩展说明](docs/vscode-extension.md)
 - [开发环境与调试](docs/development.md)
+- [性能基准与限制](docs/performance.md)
 - 设计规范：[架构与协议 V1.1](Training_Viewer_Architecture_and_Protocol_v1.1.md)、[命名与文档规范](docs/documentation_and_naming_standard.md)
 
 首次出现的技术缩写及中文解释统一登记在[术语表](docs/glossary.md)。界面中的 mIoU、F1、Step、Epoch 等指标均可通过悬停提示或指标定义查看含义与单位。

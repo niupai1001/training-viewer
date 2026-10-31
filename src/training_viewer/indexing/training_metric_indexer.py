@@ -42,6 +42,13 @@ _STATUS_LABELS = {
     "cancelled": "已取消",
 }
 
+_FILE_LEVEL_SOURCE_KINDS = {
+    "generic-csv",
+    "generic-tsv",
+    "generic-jsonl",
+    "plain-text",
+}
+
 
 @dataclass
 class IngestReport:
@@ -95,20 +102,25 @@ class TrainingMetricIndexer:
                 "SELECT * FROM runs WHERE run_id = ?", (run_id,)
             ).fetchone()
             other_at_directory = connection.execute(
-                "SELECT run_id FROM runs WHERE run_dir = ? AND run_id <> ?",
+                "SELECT run_id, source_kind FROM runs WHERE run_dir = ? AND run_id <> ?",
                 (run_directory_text, run_id),
             ).fetchone()
             if other_at_directory is not None:
-                self._delete_run(connection, other_at_directory["run_id"])
-                self._record_issue(
-                    connection,
-                    run_id=None,
-                    file_path=run_directory_text,
-                    line_number=0,
-                    message="同一目录的 run_id 发生变化，已删除旧运行的索引并按新元数据重建。",
-                    severity="warning",
+                shares_directory = (
+                    other_at_directory["source_kind"] in _FILE_LEVEL_SOURCE_KINDS
+                    or discovered.source_kind in _FILE_LEVEL_SOURCE_KINDS
                 )
-                report.changed = True
+                if not shares_directory:
+                    self._delete_run(connection, other_at_directory["run_id"])
+                    self._record_issue(
+                        connection,
+                        run_id=None,
+                        file_path=run_directory_text,
+                        line_number=0,
+                        message="同一目录的 run_id 发生变化，已删除旧运行的索引并按新元数据重建。",
+                        severity="warning",
+                    )
+                    report.changed = True
 
             metadata_changed = existing is not None and existing["metadata_json"] != metadata_json
             moved = existing is not None and existing["run_dir"] != run_directory_text
@@ -673,10 +685,11 @@ class TrainingMetricIndexer:
     def _compute_status(
         self, connection: sqlite3.Connection, run_id: str, source_kind: str
     ) -> tuple[str, str]:
-        if source_kind in ("tensorboard", "csv"):
+        if source_kind != "tvlp":
             return (
                 "imported",
-                "该来源没有生命周期事件，按“已导入”显示；最后更新时间来自日志文件本身。",
+                "该来源没有生命周期事件，按“已导入”显示；"
+                "“最近仍在更新”只表示日志有新数据，不代表训练进程仍然存在。",
             )
         lifecycle = connection.execute(
             """
@@ -701,14 +714,20 @@ class TrainingMetricIndexer:
             "SELECT MAX(timestamp) FROM metric_points WHERE run_id = ? AND timestamp IS NOT NULL",
             (run_id,),
         ).fetchone()[0]
+        if heartbeat_time is not None and self._is_recent(heartbeat_time):
+            return (
+                "running",
+                f"最近 {STALE_AFTER_SECONDS} 秒内收到心跳（{heartbeat_time}），"
+                "这是训练进程仍在工作的显式证据。",
+            )
         latest_activity = max(
             [value for value in (heartbeat_time, metric_time) if value] or [None]
         )
-        if latest_activity is not None and self._is_recent(latest_activity):
-            source_label = "心跳" if (heartbeat_time or "") >= (metric_time or "") else "新指标"
+        if metric_time is not None and self._is_recent(metric_time):
             return (
-                "running",
-                f"最近 {STALE_AFTER_SECONDS} 秒内收到{source_label}（{latest_activity}）。",
+                "unknown",
+                f"指标仍在更新（最后指标 {metric_time}），但没有近期心跳；"
+                "有新指标不等于训练进程仍然存在，因此不标记为“运行中”。",
             )
         if latest_activity is not None:
             return (

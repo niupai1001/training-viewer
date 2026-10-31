@@ -27,7 +27,7 @@ class SavedViewCreateRequest(BaseModel):
 class CompareRequest(BaseModel):
     run_ids: list[str] = Field(min_length=1, max_length=50)
     series: list[str] = Field(default_factory=list, max_length=50)
-    axis: Literal["global_step", "epoch", "timestamp"] = "global_step"
+    axis: Literal["global_step", "epoch", "timestamp", "auto"] = "auto"
     max_points: int = Field(default=1500, ge=10, le=20000)
 
 

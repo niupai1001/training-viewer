@@ -4,6 +4,7 @@ import { useApi } from "../hooks/useApi";
 import { useLiveVersion } from "../live/LiveUpdates";
 import type { MetricQueryResult, RunDetail } from "../types";
 import {
+  axisShortLabel,
   directionLabel,
   formatMetricValue,
   formatNumber,
@@ -38,13 +39,7 @@ export function RunMetricsTab({ run }: { run: RunDetail }) {
       if (valid.length > 0) {
         return valid;
       }
-      const preferred =
-        run.metric_keys.find(
-          (metric) => metric.phase === "val" && (metric.direction === "min" || metric.direction === "max"),
-        ) ??
-        run.metric_keys.find((metric) => metric.direction === "min" || metric.direction === "max") ??
-        run.metric_keys[0];
-      return preferred ? [preferred.key] : [];
+      return recommendedMetricKeys(run.metric_keys);
     });
     // metricSignature 覆盖指标集合变化；run_id 覆盖切换运行。
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -196,7 +191,17 @@ export function RunMetricsTab({ run }: { run: RunDetail }) {
       ) : null}
       {metricsState.data?.warnings.length ? <WarningList warnings={metricsState.data.warnings} /> : null}
 
-      {selectedKeys.length === 0 ? (
+      {run.metric_keys.length === 0 ? (
+        <EmptyState
+          title="这个运行还没有可绘制的指标"
+          description={
+            run.data_sources.length === 0
+              ? "查看器还没有读到日志文件；确认目录已添加，且日志正在写入。"
+              : "日志文件已读取，但没有解析到“Step/Epoch + 数值指标”。请确认日志格式，或展开下方“数据来源与协议细节”查看读取位置与问题。"
+          }
+        />
+      ) : null}
+      {run.metric_keys.length > 0 && selectedKeys.length === 0 ? (
         <EmptyState title="请选择至少一个指标" description="点击上方的指标名称即可绘制对应曲线。" />
       ) : null}
 
@@ -216,14 +221,14 @@ export function RunMetricsTab({ run }: { run: RunDetail }) {
                 unit: series.unit,
               },
             ]}
-            axis={preferences.axis}
+            axis={series.axis}
             smoothing={preferences.smoothing}
             smoothingWindow={preferences.smoothingWindow}
             logScale={preferences.logScale}
             showRaw={preferences.showRaw}
             group="run-detail"
             downsampled={series.downsampled}
-            emptyMessage={`指标 ${series.key} 在${preferences.axis}横轴上没有可用记录。`}
+            emptyMessage={`指标 ${series.key} 在${axisShortLabel(series.axis)}横轴上没有可用记录。`}
           />
         ))}
       </div>
@@ -303,24 +308,59 @@ export function RunMetricsTab({ run }: { run: RunDetail }) {
         </>
       ) : null}
 
-      <div className="source-note">
-        <h3>数据来源</h3>
-        <ul>
-          {run.data_sources.map((source) => (
-            <li key={source.file_path}>
-              <code>{source.relative_path}</code>
-              <span className="muted small">
-                （{source.file_kind}；已读取 {formatNumber(source.offset, 0)} 字节/条，文件{" "}
-                {formatNumber(source.size, 0)} 字节）
-              </span>
-            </li>
-          ))}
-          {run.data_sources.length === 0 ? <li className="muted">尚未读取到日志文件。</li> : null}
-        </ul>
-        <p className="muted small">
-          指标点来自原始日志文件；SQLite 只是可重建的索引。不同定义的指标不会自动换算单位或插值。
-        </p>
+      <div className="advanced-inline">
+        <details>
+          <summary>数据来源与协议细节</summary>
+          <ul>
+            {run.data_sources.map((source) => (
+              <li key={source.file_path}>
+                <code>{source.relative_path}</code>
+                <span className="muted small">
+                  （{source.file_kind}；已读取位置 {formatNumber(source.offset, 0)}，文件{" "}
+                  {formatNumber(source.size, 0)} 字节）
+                </span>
+              </li>
+            ))}
+            {run.data_sources.length === 0 ? <li className="muted">尚未读取到日志文件。</li> : null}
+          </ul>
+          <p className="muted small">
+            指标点来自原始日志；SQLite 只是可重建的索引。不同定义的指标不会自动换算或插值。
+          </p>
+        </details>
       </div>
     </div>
   );
+}
+
+function recommendedMetricKeys(metrics: RunDetail["metric_keys"]): string[] {
+  const phaseOf = (metric: (typeof metrics)[number]) => metric.phase.toLowerCase();
+  const isValidation = (metric: (typeof metrics)[number]) =>
+    ["val", "valid", "validation", "test", "eval"].includes(phaseOf(metric));
+  const findLoss = (validation: boolean) =>
+    metrics.find((metric) => {
+      const name = metric.metric_name.toLowerCase();
+      return name.includes("loss") && (validation ? isValidation(metric) : phaseOf(metric) === "train");
+    }) ??
+    metrics.find((metric) => {
+      const name = metric.metric_name.toLowerCase();
+      return name.includes("loss") && (validation ? !isValidation(metric) : true);
+    });
+  const priority = ["miou", "accuracy", "acc", "f1", "dice", "precision", "recall", "auc"];
+  const keyMetric = metrics
+    .filter((metric) => isValidation(metric) && metric.direction === "max")
+    .sort((left, right) => {
+      const leftIndex = priority.findIndex((name) => left.metric_name.toLowerCase().includes(name));
+      const rightIndex = priority.findIndex((name) => right.metric_name.toLowerCase().includes(name));
+      return (leftIndex < 0 ? 99 : leftIndex) - (rightIndex < 0 ? 99 : rightIndex);
+    })[0] ??
+    metrics.find((metric) => metric.direction === "max") ??
+    metrics.find((metric) => metric.direction === "min");
+  const learningRate = metrics.find((metric) =>
+    ["lr", "learning_rate"].includes(metric.metric_name.toLowerCase()),
+  );
+  const recommended = [findLoss(false), findLoss(true), keyMetric, learningRate]
+    .filter((metric): metric is (typeof metrics)[number] => metric !== undefined)
+    .map((metric) => metric.key);
+  const unique = [...new Set(recommended)].slice(0, MAX_SELECTED_METRICS);
+  return unique.length > 0 ? unique : metrics.slice(0, 1).map((metric) => metric.key);
 }

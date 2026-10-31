@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,6 +33,7 @@ class TrainingViewerService:
         now=None,
         scan_interval_seconds: float = 2.0,
         source_adapter_registry: SourceAdapterRegistry | None = None,
+        full_scan_interval_seconds: float = 300.0,
     ):
         self.paths = paths
         self.database = IndexDatabase(paths.database_file)
@@ -39,11 +41,14 @@ class TrainingViewerService:
         self.registry = source_adapter_registry or build_builtin_source_adapter_registry()
         self.scanner = RunDirectoryScanner(self.registry)
         self.indexer = TrainingMetricIndexer(self.database, now=now)
-        self.queries = IndexQueries(self.database)
+        self.queries = IndexQueries(self.database, now=now)
         self.scan_interval_seconds = scan_interval_seconds
+        self.full_scan_interval_seconds = full_scan_interval_seconds
         self.version = 0
         self.last_sync_at: str | None = None
+        self.last_full_scan_at: str | None = None
         self.last_sync_error: str | None = None
+        self._last_full_scan_monotonic: float | None = None
         self._sync_lock = threading.Lock()
         self._watch_lock = threading.RLock()
         self._subscribers: list[tuple[asyncio.AbstractEventLoop, asyncio.Queue]] = []
@@ -80,7 +85,7 @@ class TrainingViewerService:
             )
             root_id = cursor.lastrowid
         LOGGER.info("已添加扫描根目录 %s", resolved)
-        self.synchronize()
+        self.synchronize(force_full=True)
         self._refresh_watch_roots()
         return {"id": root_id, "path": str(resolved), "added_at": datetime.now(timezone.utc).isoformat()}
 
@@ -97,44 +102,84 @@ class TrainingViewerService:
             connection.execute("DELETE FROM run_conflicts")
         LOGGER.info("已移除扫描根目录 %s（原始文件未删除）", row["path"])
         self._publish({"version": self.version, "removed_root": root_id, "changed_runs": []})
-        self.synchronize()
+        self.synchronize(force_full=True)
         self._refresh_watch_roots()
         return True
 
     # ------------------------------------------------------------------ 同步
-    def synchronize(self) -> dict:
+    def synchronize(self, force_full: bool = False) -> dict:
+        """同步目录。
+
+        首次、手动刷新和达到全量间隔时重新发现目录；其余轮询只重读已知 Run 的
+        文件，避免每 2 秒遍历整个目录树。已知目录消失时会立即升级为全量扫描，
+        以发现移动后的位置。
+        """
         with self._sync_lock:
             roots = self.list_roots()
+            now_monotonic = time.monotonic()
+            full_scan_due = (
+                self._last_full_scan_monotonic is None
+                or now_monotonic - self._last_full_scan_monotonic
+                >= self.full_scan_interval_seconds
+            )
+            full_scan = bool(force_full or full_scan_due)
             changed_runs: set[str] = set()
             scan_issues: list[ParseIssue] = []
-            discovered_runs = []
+            discovered_runs: list[tuple] = []
             discovered_directories: set[str] = set()
             seen_run_ids: dict[str, str] = {}
             conflicts: list[dict] = []
-            try:
-                for root in roots:
-                    root_path = Path(root["path"])
-                    root_result = self.scanner.scan(root_path)
-                    for issue in root_result.issues:
-                        scan_issues.append(
-                            ParseIssue(issue.path, 0, issue.message, _severity(issue.severity))
+            had_ingest_issues = False
+
+            def add_discovered(discovered, root_path: Path) -> None:
+                run_directory = str(discovered.run_directory)
+                discovered_directories.add(run_directory)
+                known_directory = seen_run_ids.get(discovered.run_id)
+                if known_directory is not None:
+                    if known_directory != run_directory:
+                        conflicts.append(
+                            {
+                                "run_id": discovered.run_id,
+                                "kept_run_dir": known_directory,
+                                "conflicting_run_dir": run_directory,
+                            }
                         )
-                    for discovered in root_result.runs:
-                        run_directory = str(discovered.run_directory)
-                        if run_directory in discovered_directories:
-                            continue
-                        discovered_directories.add(run_directory)
-                        if discovered.run_id in seen_run_ids:
-                            conflicts.append(
-                                {
-                                    "run_id": discovered.run_id,
-                                    "kept_run_dir": seen_run_ids[discovered.run_id],
-                                    "conflicting_run_dir": run_directory,
-                                }
+                    return
+                seen_run_ids[discovered.run_id] = run_directory
+                discovered_runs.append((discovered, root_path))
+
+            try:
+                if not full_scan:
+                    known = self._known_run_directories(roots)
+                    if not known:
+                        full_scan = True
+                    else:
+                        for known_directory, root_path in known:
+                            try:
+                                found = self.registry.find_adapters(Path(known_directory))
+                            except Exception:  # noqa: BLE001 - 单目录失败升级为全量
+                                found = []
+                            if not found:
+                                full_scan = True
+                                break
+                            for discovered in found:
+                                add_discovered(discovered, root_path)
+
+                if full_scan:
+                    # 全量发现需要重新计算运行目录、冲突与目录级问题。
+                    discovered_runs.clear()
+                    discovered_directories.clear()
+                    seen_run_ids.clear()
+                    conflicts.clear()
+                    for root in roots:
+                        root_path = Path(root["path"])
+                        root_result = self.scanner.scan(root_path)
+                        for issue in root_result.issues:
+                            scan_issues.append(
+                                ParseIssue(issue.path, 0, issue.message, _severity(issue.severity))
                             )
-                            continue
-                        seen_run_ids[discovered.run_id] = run_directory
-                        discovered_runs.append((discovered, root_path))
+                        for discovered in root_result.runs:
+                            add_discovered(discovered, root_path)
 
                 for discovered, root_path in discovered_runs:
                     try:
@@ -148,38 +193,50 @@ class TrainingViewerService:
                                 f"索引运行失败，已跳过本次导入：{error}",
                             )
                         )
+                        had_ingest_issues = True
                         continue
+                    if report.issues:
+                        had_ingest_issues = True
                     for issue in report.issues:
                         scan_issues.append(issue)
                     if report.changed:
                         changed_runs.add(report.run_id)
 
-                self._mark_missing_directories(discovered_directories, changed_runs)
+                if full_scan:
+                    self._mark_missing_directories(discovered_directories, changed_runs)
                 changed_runs.update(self.indexer.refresh_statuses())
-                self._replace_conflicts(conflicts)
-                self.indexer.replace_scan_issues(scan_issues)
-                issue_signature = tuple(
-                    sorted(
-                        (issue.file_path, issue.line_number, issue.message)
-                        for issue in scan_issues
-                    )
-                )
-                conflict_signature = tuple(
-                    sorted(
-                        (
-                            conflict["run_id"],
-                            conflict["kept_run_dir"],
-                            conflict["conflicting_run_dir"],
+                if full_scan:
+                    self._replace_conflicts(conflicts)
+                    self.indexer.replace_scan_issues(scan_issues)
+                    issue_signature = tuple(
+                        sorted(
+                            (issue.file_path, issue.line_number, issue.message)
+                            for issue in scan_issues
                         )
-                        for conflict in conflicts
                     )
-                )
-                diagnostics_changed = (
-                    issue_signature != self._last_scan_issue_signature
-                    or conflict_signature != self._last_conflict_signature
-                )
-                self._last_scan_issue_signature = issue_signature
-                self._last_conflict_signature = conflict_signature
+                    conflict_signature = tuple(
+                        sorted(
+                            (
+                                conflict["run_id"],
+                                conflict["kept_run_dir"],
+                                conflict["conflicting_run_dir"],
+                            )
+                            for conflict in conflicts
+                        )
+                    )
+                    diagnostics_changed = (
+                        issue_signature != self._last_scan_issue_signature
+                        or conflict_signature != self._last_conflict_signature
+                    )
+                    self._last_scan_issue_signature = issue_signature
+                    self._last_conflict_signature = conflict_signature
+                    self._last_full_scan_monotonic = now_monotonic
+                    self.last_full_scan_at = datetime.now(timezone.utc).isoformat()
+                else:
+                    diagnostics_changed = had_ingest_issues
+                    issue_signature = self._last_scan_issue_signature
+                    conflict_signature = self._last_conflict_signature
+
                 self.version += 1
                 self.last_sync_at = datetime.now(timezone.utc).isoformat()
                 self.last_sync_error = None
@@ -197,11 +254,30 @@ class TrainingViewerService:
                     "changed_runs": sorted(changed_runs),
                     "run_count": len(discovered_runs),
                     "issue_count": len(scan_issues),
+                    "full_scan": full_scan,
                 }
             except Exception as error:  # noqa: BLE001 - 后台线程必须保持存活
                 self.last_sync_error = str(error)
                 LOGGER.exception("同步失败")
                 raise
+
+    def _known_run_directories(self, roots: list[dict]) -> list[tuple[str, Path]]:
+        if not roots:
+            return []
+        placeholders = ",".join("?" for _ in roots)
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                f"SELECT run_dir, root_path FROM runs WHERE root_path IN ({placeholders})",
+                [root["path"] for root in roots],
+            ).fetchall()
+        seen: set[str] = set()
+        known: list[tuple[str, Path]] = []
+        for row in rows:
+            if row["run_dir"] in seen:
+                continue
+            seen.add(row["run_dir"])
+            known.append((row["run_dir"], Path(row["root_path"])))
+        return known
 
     def _mark_missing_directories(
         self, discovered_directories: set[str], changed_runs: set[str]
@@ -275,6 +351,8 @@ class TrainingViewerService:
             "application": "training-viewer",
             "version": self.version,
             "last_sync_at": self.last_sync_at,
+            "last_full_scan_at": self.last_full_scan_at,
+            "full_scan_interval_seconds": self.full_scan_interval_seconds,
             "last_sync_error": self.last_sync_error,
             "data_dir": str(self.paths.data_dir),
         }

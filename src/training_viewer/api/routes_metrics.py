@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from ..export.metric_exporters import MetricExporterRegistry
-from ..indexing.index_queries import VALID_AXES
+from ..indexing.index_queries import AXIS_REQUESTS
 from ..service import TrainingViewerService
 from .dependencies import get_exporter_registry, get_service, safe_filename
 from .request_models import CompareRequest, ExportRequest
@@ -15,10 +15,10 @@ router = APIRouter(prefix="/api/v1")
 
 
 def _validate_axis(axis: str) -> None:
-    if axis not in VALID_AXES:
+    if axis not in AXIS_REQUESTS:
         raise HTTPException(
             status_code=400,
-            detail=f"不支持的横轴：{axis}；允许 {', '.join(VALID_AXES)}",
+            detail=f"不支持的横轴：{axis}；允许 {', '.join(AXIS_REQUESTS)}",
         )
 
 
@@ -34,7 +34,7 @@ def metric_keys(run_id: str, service: TrainingViewerService = Depends(get_servic
 def query_metrics(
     run_id: str,
     series: list[str] = Query(default=[]),
-    axis: str = Query(default="global_step"),
+    axis: str = Query(default="auto"),
     max_points: int = Query(default=2000, ge=10, le=20000),
     service: TrainingViewerService = Depends(get_service),
 ) -> dict:
@@ -117,7 +117,7 @@ def _export_response(
 def export_run_metrics(
     run_id: str,
     series: list[str] = Query(default=[]),
-    axis: str = Query(default="global_step"),
+    axis: str = Query(default="auto"),
     max_points: int = Query(default=1500, ge=10, le=20000),
     format: str = Query(default="csv"),
     smoothing_method: str | None = None,

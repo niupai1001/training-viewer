@@ -8,6 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from .. import TVLP_SCHEMA_VERSION, __version__
 from ..export.metric_exporters import MetricExporterRegistry
 from ..service import TrainingViewerService
+from ..system_directory_picker import (
+    DirectoryPickerUnavailableError,
+    select_directory_with_system_dialog,
+)
 from .dependencies import get_exporter_registry, get_service
 from .request_models import AnnotationUpdateRequest, RootCreateRequest, SavedViewCreateRequest
 
@@ -17,6 +21,10 @@ SOURCE_KIND_LABELS = {
     "tvlp": "标准训练日志（TVLP 1.0）",
     "tensorboard": "TensorBoard 事件文件",
     "csv": "CSV 指标表",
+    "generic-csv": "通用 CSV 文件",
+    "generic-tsv": "通用 TSV 文件",
+    "generic-jsonl": "通用 JSONL 文件",
+    "plain-text": "普通文本训练日志",
 }
 
 
@@ -151,6 +159,18 @@ def add_root(
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
+@router.post("/roots/select")
+def select_root_directory() -> dict:
+    """打开本机系统目录选择框；无桌面环境时返回 501。"""
+    try:
+        selected = select_directory_with_system_dialog()
+    except DirectoryPickerUnavailableError as error:
+        raise HTTPException(status_code=501, detail=str(error)) from error
+    if selected is None:
+        raise HTTPException(status_code=400, detail="没有选择目录。")
+    return {"path": selected}
+
+
 @router.delete("/roots/{root_id}")
 def remove_root(root_id: int, service: TrainingViewerService = Depends(get_service)) -> dict:
     if not service.remove_root(root_id):
@@ -161,7 +181,7 @@ def remove_root(root_id: int, service: TrainingViewerService = Depends(get_servi
 @router.post("/rescan")
 def rescan(service: TrainingViewerService = Depends(get_service)) -> dict:
     try:
-        return service.synchronize()
+        return service.synchronize(force_full=True)
     except Exception as error:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"扫描失败：{error}") from error
 
@@ -169,6 +189,14 @@ def rescan(service: TrainingViewerService = Depends(get_service)) -> dict:
 @router.get("/saved-views")
 def list_saved_views(service: TrainingViewerService = Depends(get_service)) -> dict:
     return {"saved_views": service.queries.list_saved_views()}
+
+
+@router.get("/saved-views/{view_id}")
+def get_saved_view(view_id: int, service: TrainingViewerService = Depends(get_service)) -> dict:
+    view = service.queries.get_saved_view(view_id)
+    if view is None:
+        raise HTTPException(status_code=404, detail=f"找不到保存的视图：{view_id}")
+    return view
 
 
 @router.post("/saved-views", status_code=201)

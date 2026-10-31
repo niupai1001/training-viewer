@@ -34,7 +34,7 @@
 | 输入 | `log_root` / `run_directory` | 路径 | 二选一；默认 `<log_root>/<run_id>` |
 | 输入 | `project`、`name` | 字符串 | 必填的人类可读身份 |
 | 输入 | `run_id` | UUID 字符串 | 可选；断点续训必须复用 |
-| 输入 | `metric_definitions` | 字典 | 键为 `phase/metric_name`，含 `direction`/`unit`/`definition` |
+| 输入 | `metric_definitions` | 字典 | 键为 `phase/metric_name`，含 `direction`/`unit`/`definition`；`direction` 只能是 min/max/none，省略或 None 会规范为 none |
 | 输入 | `config`、`model`、`dataset`、`source`、`tags` | JSON 兼容值 | 写入 `run.json` |
 | 输入 | `session_id` | 字符串 | 可选；默认每次启动自动生成 |
 | 输入 | `heartbeat_interval_seconds` | 浮点或 `None` | 默认 30 秒；`0` 关闭 |
@@ -92,7 +92,7 @@
 ## 已知限制与回退
 
 - 同一 Run 目录不支持多个训练进程同时写入；推荐仅 rank 0 写入。
-- 不自动判断哪个指标是“最佳指标”；`metric_definitions` 必须由训练 Agent 按真实定义填写。
+- 不自动判断哪个指标是“最佳指标”；`metric_definitions` 必须由训练 Agent 按真实定义填写。`direction` 非法会直接抛 `ValueError`，不会写入不可校验的 `run.json`。
 - 心跳是活动证据，不代表训练质量；`finish` 必须执行，否则查看器会显示状态未知。
 - 若训练环境不能安装本包，可复制 `writer.py`（仅标准库）。
 - 回退：不调用写入器、直接按协议写文件；已生成日志不会被修改。

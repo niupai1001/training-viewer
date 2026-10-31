@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from conftest import EXAMPLE_RUNS, make_run_directory, metric_record
+from training_viewer.api import routes_catalog
 
 EXAMPLES = EXAMPLE_RUNS
 
@@ -173,7 +174,12 @@ def test_export_csv_and_json_include_provenance(client) -> None:
     run = _run_by_name(test_client, "segformer-baseline")
     csv_response = test_client.get(
         f"/api/v1/runs/{run['run_id']}/metrics/export",
-        params=[("series", "val/miou"), ("format", "csv"), ("smoothing_method", "ema")],
+        params=[
+            ("series", "val/miou"),
+            ("format", "csv"),
+            ("axis", "global_step"),
+            ("smoothing_method", "ema"),
+        ],
     )
     assert csv_response.status_code == 200
     assert csv_response.text.startswith("# exported_at:")
@@ -184,7 +190,7 @@ def test_export_csv_and_json_include_provenance(client) -> None:
 
     json_response = test_client.get(
         f"/api/v1/runs/{run['run_id']}/metrics/export",
-        params=[("series", "val/miou"), ("format", "json")],
+        params=[("series", "val/miou"), ("format", "json"), ("axis", "global_step")],
     )
     assert json_response.status_code == 200
     payload = json.loads(json_response.text)
@@ -337,8 +343,26 @@ def test_annotations_and_saved_views(client) -> None:
     view_id = created.json()["id"]
     views = test_client.get("/api/v1/saved-views").json()["saved_views"]
     assert views[0]["name"] == "基线与波长编码对比"
+    restored = test_client.get(f"/api/v1/saved-views/{view_id}")
+    assert restored.status_code == 200
+    assert restored.json()["payload"]["run_ids"] == [run["run_id"]]
     assert test_client.delete(f"/api/v1/saved-views/{view_id}").status_code == 200
     assert test_client.get("/api/v1/saved-views").json()["saved_views"] == []
+    assert test_client.get(f"/api/v1/saved-views/{view_id}").status_code == 404
+
+
+def test_system_directory_picker_returns_selected_path(client, monkeypatch) -> None:
+    test_client, _ = client
+    monkeypatch.setattr(
+        routes_catalog,
+        "select_directory_with_system_dialog",
+        lambda: str(EXAMPLES),
+    )
+    response = test_client.post("/api/v1/roots/select")
+    assert response.status_code == 200
+    assert response.json()["path"] == str(EXAMPLES)
+    monkeypatch.setattr(routes_catalog, "select_directory_with_system_dialog", lambda: None)
+    assert test_client.post("/api/v1/roots/select").status_code == 400
 
 
 def test_diagnostics_lists_broken_run(client, tmp_path) -> None:

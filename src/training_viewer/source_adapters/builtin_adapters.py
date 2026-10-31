@@ -21,6 +21,7 @@ from ..log_readers.standard_training_log_reader import StandardTrainingLogReader
 from ..log_readers.tensorboard_event_reader import TensorBoardEventReader
 from ..run_metadata import RunMetadataReader
 from .base import DiscoveredRun, LogFileSpec, SourceAdapter, SourceAdapterRegistry
+from .generic_log_file_adapter import GenericLogFileSourceAdapter
 
 DEFAULT_SYNTHETIC_PROJECT = "未命名项目"
 
@@ -179,6 +180,7 @@ def build_builtin_source_adapter_registry() -> SourceAdapterRegistry:
     registry.register(StandardTvlpSourceAdapter())
     registry.register(TensorBoardSourceAdapter())
     registry.register(CsvSourceAdapter())
+    registry.register(GenericLogFileSourceAdapter())
     _load_entry_point_adapters(registry)
     return registry
 
@@ -203,6 +205,7 @@ def _load_entry_point_adapters(registry: SourceAdapterRegistry) -> None:
 
 __all__ = [
     "CsvSourceAdapter",
+    "GenericLogFileSourceAdapter",
     "SourceAdapter",
     "StandardTvlpSourceAdapter",
     "TensorBoardSourceAdapter",

@@ -65,9 +65,19 @@ class SourceAdapterRegistry:
     def adapters(self) -> list[SourceAdapter]:
         return list(self._adapters)
 
-    def find_adapter(self, run_directory: Path) -> DiscoveredRun | None:
+    def find_adapters(self, run_directory: Path) -> list[DiscoveredRun]:
+        """返回该目录下匹配来源的全部 Run（通用文件来源可能一个目录多个文件）。"""
         for adapter in self._adapters:
-            discovered = adapter.discover(run_directory)
-            if discovered is not None:
+            discover_many = getattr(adapter, "discover_many", None)
+            if discover_many is not None:
+                discovered = list(discover_many(run_directory))
+            else:
+                single = adapter.discover(run_directory)
+                discovered = [single] if single is not None else []
+            if discovered:
                 return discovered
-        return None
+        return []
+
+    def find_adapter(self, run_directory: Path) -> DiscoveredRun | None:
+        discovered = self.find_adapters(run_directory)
+        return discovered[0] if discovered else None

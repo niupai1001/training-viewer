@@ -1,9 +1,9 @@
-import type { Axis, SmoothingMethod } from "../types";
+import type { AxisRequest, SmoothingMethod } from "../types";
 import { axisLabel } from "../utils/format";
 import { smoothingLabel } from "../utils/smoothing";
 
 export interface ChartPreferences {
-  axis: Axis;
+  axis: AxisRequest;
   smoothing: SmoothingMethod;
   smoothingWindow: number;
   logScale: boolean;
@@ -11,7 +11,7 @@ export interface ChartPreferences {
 }
 
 export const DEFAULT_CHART_PREFERENCES: ChartPreferences = {
-  axis: "global_step",
+  axis: "auto",
   smoothing: "none",
   smoothingWindow: 5,
   logScale: false,
@@ -21,11 +21,11 @@ export const DEFAULT_CHART_PREFERENCES: ChartPreferences = {
 export function ChartControls({
   value,
   onChange,
-  axes = ["global_step", "epoch", "timestamp"],
+  axes = ["auto", "global_step", "epoch", "timestamp"],
 }: {
   value: ChartPreferences;
   onChange: (next: ChartPreferences) => void;
-  axes?: Axis[];
+  axes?: AxisRequest[];
 }) {
   return (
     <div className="chart-controls" role="group" aria-label="图表显示设置">
@@ -38,9 +38,19 @@ export function ChartControls({
               type="button"
               className={`segment ${value.axis === axis ? "segment-active" : ""}`}
               onClick={() => onChange({ ...value, axis })}
-              title={`按${axisLabel(axis)}绘制`}
+              title={
+                axis === "auto"
+                  ? "按每个指标实际存在的数据自动选择优化步或训练轮次"
+                  : `按${axisLabel(axis)}绘制`
+              }
             >
-              {axis === "global_step" ? "优化步" : axis === "epoch" ? "训练轮次" : "时间"}
+              {axis === "auto"
+                ? "自动"
+                : axis === "global_step"
+                  ? "优化步"
+                  : axis === "epoch"
+                    ? "训练轮次"
+                    : "时间"}
             </button>
           ))}
         </div>

@@ -4,7 +4,7 @@ import { useApi } from "../hooks/useApi";
 import { useLiveVersion } from "../live/LiveUpdates";
 import type { CompareResult, MetricKey } from "../types";
 import { useRoute } from "../navigation/route";
-import { formatNumber, unitLabel, directionLabel } from "../utils/format";
+import { axisShortLabel, formatNumber, unitLabel, directionLabel } from "../utils/format";
 import {
   EmptyState,
   ErrorBlock,
@@ -35,22 +35,67 @@ export function ComparisonPage() {
   const [preferences, setPreferences] = useState<ChartPreferences>(() => ({
     ...DEFAULT_CHART_PREFERENCES,
     axis: (route.params.get("axis") as ChartPreferences["axis"]) || DEFAULT_CHART_PREFERENCES.axis,
+    smoothing: (route.params.get("smoothing") as ChartPreferences["smoothing"]) || DEFAULT_CHART_PREFERENCES.smoothing,
+    smoothingWindow: Number(route.params.get("smoothing_window") ?? DEFAULT_CHART_PREFERENCES.smoothingWindow),
+    logScale: route.params.get("scale") === "log",
   }));
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const explicitSeriesRef = useRef(route.params.has("series"));
+  const explicitSeriesRef = useRef(route.params.has("series") || route.params.has("view"));
 
   useEffect(() => {
-    explicitSeriesRef.current = route.params.has("series");
-    setSelectedIds(
-      (route.params.get("runs") ?? "").split(",").filter(Boolean).slice(0, MAX_COMPARE_RUNS),
-    );
-    setSelectedSeries((route.params.get("series") ?? "").split(",").filter(Boolean));
-    const axis = route.params.get("axis");
-    if (axis === "global_step" || axis === "epoch" || axis === "timestamp") {
-      setPreferences((current) => ({ ...current, axis }));
+    const viewId = route.params.get("view");
+    if (!viewId) {
+      explicitSeriesRef.current = route.params.has("series");
+      setSelectedIds(
+        (route.params.get("runs") ?? "").split(",").filter(Boolean).slice(0, MAX_COMPARE_RUNS),
+      );
+      setSelectedSeries((route.params.get("series") ?? "").split(",").filter(Boolean));
+      const axis = route.params.get("axis");
+      setPreferences((current) => ({
+        ...current,
+        ...(axis === "global_step" || axis === "epoch" || axis === "timestamp" || axis === "auto"
+          ? { axis }
+          : {}),
+        ...(route.params.get("smoothing")
+          ? { smoothing: route.params.get("smoothing") as ChartPreferences["smoothing"] }
+          : {}),
+        ...(route.params.get("smoothing_window")
+          ? { smoothingWindow: Number(route.params.get("smoothing_window")) }
+          : {}),
+        ...(route.params.get("scale") ? { logScale: route.params.get("scale") === "log" } : {}),
+      }));
+      return;
     }
-    // 仅在外部导航改变地址栏参数时同步。
+    explicitSeriesRef.current = true;
+    let cancelled = false;
+    api
+      .savedView(Number(viewId))
+      .then((view) => {
+        if (cancelled) {
+          return;
+        }
+        setSelectedIds((view.payload.run_ids ?? []).slice(0, MAX_COMPARE_RUNS));
+        setSelectedSeries(view.payload.series ?? []);
+        setPreferences((current) => ({
+          ...current,
+          axis: view.payload.axis ?? "auto",
+          smoothing: view.payload.smoothing ?? "none",
+          smoothingWindow: view.payload.smoothing_window ?? 5,
+          logScale: view.payload.scale === "log",
+          showRaw: view.payload.show_raw ?? false,
+        }));
+        setNotice(`已恢复保存的视图：${view.name}`);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // 仅在外部地址栏变化时同步；当前页面内的选择更新不写回 hash 依赖。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeKey]);
 
@@ -147,9 +192,11 @@ export function ComparisonPage() {
       params.set("series", selectedSeries.join(","));
     }
     params.set("axis", preferences.axis);
+    params.set("smoothing", preferences.smoothing);
+    params.set("smoothing_window", String(preferences.smoothingWindow));
+    params.set("scale", preferences.logScale ? "log" : "linear");
     window.history.replaceState(null, "", `#/compare?${params.toString()}`);
-    // 使用 replaceState 避免每次切换指标都增加浏览器历史记录。
-  }, [selectedIds, selectedSeries, preferences.axis]);
+  }, [selectedIds, selectedSeries, preferences.axis, preferences.smoothing, preferences.smoothingWindow, preferences.logScale]);
 
   const selectedRuns = (runsState.data?.runs ?? []).filter((run) => selectedIds.includes(run.run_id));
 
@@ -199,6 +246,7 @@ export function ComparisonPage() {
           smoothing: preferences.smoothing,
           smoothing_window: preferences.smoothingWindow,
           scale: preferences.logScale ? "log" : "linear",
+          show_raw: preferences.showRaw,
         },
       });
       setNotice(`已保存对比视图“${name}”，可在总览页重新打开。`);
@@ -335,14 +383,14 @@ export function ComparisonPage() {
                         series.direction,
                       )}${series.definition ? ` · 定义：${series.definition}` : ""}`}
                       lines={runLines}
-                      axis={preferences.axis}
+                      axis={series.axis}
                       smoothing={preferences.smoothing}
                       smoothingWindow={preferences.smoothingWindow}
                       logScale={preferences.logScale}
                       showRaw={preferences.showRaw}
                       group="comparison"
                       downsampled={downsampled}
-                      emptyMessage={`没有运行在${preferences.axis}横轴上记录该指标。`}
+                      emptyMessage={`没有运行在${axisShortLabel(series.axis)}横轴上记录该指标。`}
                     />
                     {series.warnings.length > 0 ? <WarningList warnings={series.warnings} /> : null}
                     <p className="muted small">

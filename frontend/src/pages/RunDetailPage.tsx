@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { useLiveVersion } from "../live/LiveUpdates";
+import { navigate } from "../navigation/route";
 import type { RunDetail } from "../types";
 import {
   formatDateTime,
@@ -17,6 +18,7 @@ import {
   Tag,
   WarningList,
 } from "../components/Common";
+import { LatestArtifactPreview } from "../components/LatestArtifactPreview";
 import { RunMetricsTab } from "../components/RunMetricsTab";
 import { RunConfigTab } from "../components/RunConfigTab";
 import { RunArtifactsTab } from "../components/RunArtifactsTab";
@@ -27,10 +29,49 @@ export function RunDetailPage({ runId }: { runId: string }) {
   const liveVersion = useLiveVersion();
   const state = useApi(() => api.run(runId), [runId, liveVersion]);
   const [activeTab, setActiveTab] = useState("metrics");
+  const [comparing, setComparing] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
 
   useEffect(() => {
     setActiveTab("metrics");
+    setCompareError(null);
   }, [runId]);
+
+  async function addRecommendedComparison() {
+    if (!state.data) {
+      return;
+    }
+    setComparing(true);
+    setCompareError(null);
+    try {
+      const candidates = await api.runs({
+        project: state.data.project,
+        limit: 50,
+        sort: "-last_updated_at",
+      });
+      const sameDataset = candidates.runs
+        .filter(
+          (candidate) =>
+            candidate.run_id !== state.data!.run_id &&
+            candidate.dataset?.name === state.data!.dataset?.name,
+        )
+        .slice(0, 3);
+      const runIds = [state.data.run_id, ...sameDataset.map((candidate) => candidate.run_id)];
+      const metricKey =
+        state.data.metric_keys.find(
+          (metric) =>
+            metric.phase === "val" && (metric.direction === "min" || metric.direction === "max"),
+        )?.key ?? state.data.metric_keys[0]?.key;
+      const query = runIds.map(encodeURIComponent).join(",");
+      navigate(
+        `/compare?runs=${query}${metricKey ? `&series=${encodeURIComponent(metricKey)}` : ""}`,
+      );
+    } catch (cause) {
+      setCompareError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setComparing(false);
+    }
+  }
 
   if (state.loading && !state.data) {
     return (
@@ -65,7 +106,7 @@ export function RunDetailPage({ runId }: { runId: string }) {
   return (
     <div className="page run-detail-page">
       <div className="breadcrumbs">
-        <a href="#/runs">实验管理</a>
+        <a href="#/runs">实验库</a>
         <span>/</span>
         <span>{run.project}</span>
         {run.experiment ? (
@@ -83,6 +124,9 @@ export function RunDetailPage({ runId }: { runId: string }) {
           <div className="run-title-row">
             <h1>{run.name}</h1>
             <StatusBadge status={run.status} label={run.status_label} reason={run.status_reason} />
+            <span className={`activity-badge activity-${run.activity}`} title={run.status_reason}>
+              {run.activity_label}
+            </span>
             <button
               type="button"
               className={`star-button star-large ${run.favorite ? "starred" : ""}`}
@@ -134,17 +178,26 @@ export function RunDetailPage({ runId }: { runId: string }) {
           {run.warnings.length > 0 ? <WarningList warnings={run.warnings} /> : null}
         </div>
         <div className="run-header-actions">
-          <a className="button" href={`#/results?run=${encodeURIComponent(run.run_id)}`}>
-            查看预测结果
-          </a>
-          <a className="button" href={`#/compare?runs=${encodeURIComponent(run.run_id)}`}>
-            与其他运行对比
-          </a>
+          {run.artifact_tags.length > 0 ? (
+            <a className="button" href={`#/results?run=${encodeURIComponent(run.run_id)}`}>
+              查看预测结果
+            </a>
+          ) : null}
+          <button
+            type="button"
+            className="button button-primary"
+            disabled={comparing}
+            onClick={addRecommendedComparison}
+          >
+            {comparing ? "准备对比…" : "加入对比"}
+          </button>
           <button type="button" className="button" onClick={state.reload}>
             刷新
           </button>
         </div>
       </header>
+      {compareError ? <p className="notice notice-error">{compareError}</p> : null}
+      {run.artifact_tags.length > 0 ? <LatestArtifactPreview runId={run.run_id} /> : null}
 
       <NoteEditor run={run} onSaved={state.reload} />
 

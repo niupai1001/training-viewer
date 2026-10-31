@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from pathlib import Path
 
 LOGGER = logging.getLogger("training_viewer.watcher")
@@ -20,10 +21,17 @@ except ImportError:  # pragma: no cover - 仅在依赖被裁剪时发生
 
 
 class _WakeupHandler(FileSystemEventHandler if FileSystemEventHandler else object):
-    def __init__(self, wake_up):
+    def __init__(self, wake_up, structure_changed):
         self._wake_up = wake_up
+        self._structure_changed = structure_changed
 
     def on_any_event(self, event):  # noqa: D401 - watchdog 回调
+        if getattr(event, "is_directory", False) and event.event_type in (
+            "created",
+            "deleted",
+            "moved",
+        ):
+            self._structure_changed()
         self._wake_up()
 
 
@@ -35,6 +43,8 @@ class LogUpdateWatcher:
         self.interval_seconds = interval_seconds
         self._stop_event = threading.Event()
         self._wakeup_event = threading.Event()
+        self._structure_dirty = threading.Event()
+        self._force_full_until = 0.0
         self._thread: threading.Thread | None = None
         self._observer = None
         self._observer_lock = threading.RLock()
@@ -59,13 +69,18 @@ class LogUpdateWatcher:
     def wake_up(self) -> None:
         self._wakeup_event.set()
 
+    def structure_changed(self) -> None:
+        """新目录/移动目录需要重新发现，不能只重读已知 Run。"""
+        self._structure_dirty.set()
+        self._wakeup_event.set()
+
     def refresh_watches(self) -> None:
         if Observer is None:
             return
         with self._observer_lock:
             self._stop_observer()
             observer = Observer()
-            handler = _WakeupHandler(self.wake_up)
+            handler = _WakeupHandler(self.wake_up, self.structure_changed)
             scheduled = 0
             for root in self.service.list_roots():
                 path = Path(root["path"])
@@ -95,7 +110,7 @@ class LogUpdateWatcher:
         if Observer is None:
             LOGGER.warning("watchdog 不可用，仅使用 %.1f 秒轮询", self.interval_seconds)
         try:
-            self.service.synchronize()
+            self.service.synchronize(force_full=True)
         except Exception:  # noqa: BLE001
             LOGGER.exception("首次目录同步失败")
         while not self._stop_event.is_set():
@@ -103,7 +118,12 @@ class LogUpdateWatcher:
             self._wakeup_event.clear()
             if self._stop_event.is_set():
                 break
+            if self._structure_dirty.is_set():
+                self._structure_dirty.clear()
+                # 目录出现到 run.json 写完通常有短暂间隔，连续两轮全量即可收敛。
+                self._force_full_until = time.monotonic() + 3
+            force_full = time.monotonic() <= self._force_full_until
             try:
-                self.service.synchronize()
+                self.service.synchronize(force_full=force_full)
             except Exception:  # noqa: BLE001 - 后台线程必须保持存活
                 LOGGER.exception("轮询同步失败，将在下一轮重试")

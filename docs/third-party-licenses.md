@@ -26,6 +26,10 @@
 | pytest | MIT | 后端测试 |
 | httpx | BSD 3-Clause | FastAPI TestClient 传输 |
 | Ruff | MIT | Python 静态检查 |
+| Vitest | MIT | 前端组件测试 |
+| @testing-library/react / jest-dom | MIT | React 组件生命周期测试 |
+| jsdom | MIT | 前端测试 DOM 环境 |
+| playwright-core | Apache-2.0 | 真实浏览器 E2E（使用本机 Chrome，不下载浏览器） |
 | @vscode/vsce | MIT | VSIX 打包（不进入 VSIX） |
 
 ## 3. Apache-2.0 通知义务
