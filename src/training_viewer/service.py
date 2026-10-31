@@ -125,9 +125,32 @@ class TrainingViewerService:
                 raise ValueError(f"来源文件不存在：{path}")
             if not any(path.is_relative_to(root) for root in roots):
                 raise ValueError(f"来源文件不在已添加的日志根目录内：{path}")
+            if str(path) in resolved_files:
+                raise ValueError(f"来源文件重复：{path}")
             resolved_files.append(str(path))
         if not resolved_files:
             raise ValueError("至少选择一个来源文件")
+        parents = {Path(item).parent for item in resolved_files}
+        if len(parents) != 1:
+            raise ValueError("当前只允许同一目录内的文件归并；跨目录规则会被拒绝")
+        existing = self.logical_runs.load()
+        previous = next(
+            (item for item in existing if item.logical_run_id == logical_run_id.strip()),
+            None,
+        )
+        if previous is None and self._run_exists(logical_run_id.strip()):
+            raise ValueError(f"逻辑实验 ID 与现有 Run 冲突：{logical_run_id}")
+        for other in existing:
+            if other.logical_run_id == logical_run_id.strip():
+                continue
+            overlap = set(resolved_files) & set(other.files)
+            if overlap:
+                raise ValueError(
+                    f"来源文件已属于另一个逻辑实验 {other.logical_run_id}：{sorted(overlap)}"
+                )
+        source_kinds = self._source_kinds_for_files(resolved_files)
+        if "tvlp" in source_kinds:
+            raise ValueError("标准 TVLP Run 的 run.json 已有权威身份，不能再手工归并")
         override = LogicalRunOverride(
             logical_run_id=logical_run_id.strip(),
             name=name.strip(),
@@ -135,6 +158,12 @@ class TrainingViewerService:
             reason=reason.strip() or "user-confirmed",
             created_at=datetime.now(timezone.utc).isoformat(),
         )
+        # 同一 logical_run_id 的成员变化必须重建：先删旧合并 Run，再删相关来源 Run。
+        affected_files = set(resolved_files)
+        if previous is not None:
+            affected_files.update(previous.files)
+        self.indexer.delete_run(override.logical_run_id)
+        self.indexer.delete_runs_for_source_files(sorted(affected_files))
         self.logical_runs.upsert(override)
         self.synchronize(force_full=True)
         return next(
@@ -142,6 +171,21 @@ class TrainingViewerService:
             for item in self.list_logical_overrides()
             if item["logical_run_id"] == override.logical_run_id
         )
+
+    def _source_kinds_for_files(self, files: list[str]) -> set[str]:
+        if not files:
+            return set()
+        placeholders = ",".join("?" for _ in files)
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT DISTINCT r.source_kind
+                FROM ingestion_cursors c JOIN runs r ON r.run_id = c.run_id
+                WHERE c.file_path IN ({placeholders})
+                """,
+                files,
+            ).fetchall()
+        return {row["source_kind"] for row in rows}
 
     def delete_logical_override(self, logical_run_id: str) -> bool:
         before = {item.logical_run_id for item in self.logical_runs.load()}

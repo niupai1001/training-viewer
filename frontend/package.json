@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "node e2e/smoke.mjs",
+    "e2e:live": "node e2e/live-refresh.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

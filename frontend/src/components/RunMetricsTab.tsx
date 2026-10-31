@@ -19,7 +19,17 @@ import { MetricChart } from "../components/MetricChart";
 
 const MAX_SELECTED_METRICS = 6;
 
-export function RunMetricsTab({ run, chartLimit }: { run: RunDetail; chartLimit?: number }) {
+export function RunMetricsTab({
+  run,
+  chartLimit,
+  maxSelected = MAX_SELECTED_METRICS,
+  compactControls = false,
+}: {
+  run: RunDetail;
+  chartLimit?: number;
+  maxSelected?: number;
+  compactControls?: boolean;
+}) {
   const liveVersion = useLiveVersion();
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [phaseFilter, setPhaseFilter] = useState<string>("all");
@@ -54,9 +64,9 @@ export function RunMetricsTab({ run, chartLimit }: { run: RunDetail; chartLimit?
     setSelectedKeys((current) => {
       const valid = current.filter((key) => run.metric_keys.some((metric) => metric.key === key));
       if (valid.length > 0) {
-        return valid;
+        return valid.slice(0, maxSelected);
       }
-      return recommendedMetricKeys(run.metric_keys);
+      return recommendedMetricKeys(run.metric_keys).slice(0, maxSelected);
     });
     // metricSignature 覆盖指标集合变化；run_id 覆盖切换运行。
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,7 +90,7 @@ export function RunMetricsTab({ run, chartLimit }: { run: RunDetail; chartLimit?
       preferences.axis,
       range?.min,
       range?.max,
-      run.status === "running" ? liveVersion : 0,
+      liveVersion,
     ],
   );
 
@@ -94,8 +104,8 @@ export function RunMetricsTab({ run, chartLimit }: { run: RunDetail; chartLimit?
       if (current.includes(key)) {
         return current.filter((item) => item !== key);
       }
-      if (current.length >= MAX_SELECTED_METRICS) {
-        setLimitMessage(`一次最多显示 ${MAX_SELECTED_METRICS} 条指标曲线，请先取消其它指标。`);
+      if (current.length >= maxSelected) {
+        setLimitMessage(`一次最多显示 ${maxSelected} 条指标曲线，请先取消其它指标。`);
         return current;
       }
       window.localStorage.setItem("training-viewer.last-primary-metric", key);
@@ -183,7 +193,7 @@ export function RunMetricsTab({ run, chartLimit }: { run: RunDetail; chartLimit?
             ))}
           </div>
           <span className="muted small">
-            已选 {selectedKeys.length} / {MAX_SELECTED_METRICS}
+            已选 {selectedKeys.length} / {maxSelected}
           </span>
         </div>
         <div className="metric-chips">
@@ -210,7 +220,14 @@ export function RunMetricsTab({ run, chartLimit }: { run: RunDetail; chartLimit?
         {limitMessage ? <p className="notice notice-warning">{limitMessage}</p> : null}
       </div>
 
-      <ChartControls value={preferences} onChange={setPreferences} />
+      {compactControls ? (
+        <details className="chart-advanced">
+          <summary>图表设置（横轴、平滑、对数轴）</summary>
+          <ChartControls value={preferences} onChange={setPreferences} />
+        </details>
+      ) : (
+        <ChartControls value={preferences} onChange={setPreferences} />
+      )}
       {range ? (
         <p className="chart-note">
           当前只查询 {formatNumber(range.min, 2)} – {formatNumber(range.max, 2)} 区间。

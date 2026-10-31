@@ -90,10 +90,21 @@ export function RunSelector({
         {filtered.size === 0 ? <p className="muted">没有匹配的运行。</p> : null}
         {Array.from(filtered.entries()).map(([project, experiments]) => (
           <section key={project} className="run-selector-project">
-            <h3>{project}</h3>
+            <h3>
+              <a href={`#/runs?${new URLSearchParams({ project }).toString()}`}>{project}</a>
+            </h3>
             {Array.from(experiments.entries()).map(([experiment, list]) => (
               <div key={`${project}/${experiment}`} className="run-selector-experiment">
-                <h4>{experiment}</h4>
+                <h4>
+                  <a
+                    href={`#/runs?${new URLSearchParams({
+                      project,
+                      ...(experiment === "未分组" ? {} : { experiment }),
+                    }).toString()}`}
+                  >
+                    {experiment}
+                  </a>
+                </h4>
                 {list.map((run) => {
                   const checked = selectedIds.includes(run.run_id);
                   const disabled = !checked && selectedIds.length >= maxSelected;
@@ -109,7 +120,25 @@ export function RunSelector({
                         disabled={disabled}
                         onChange={() => toggle(run.run_id)}
                       />
-                      <span className="run-selector-name">{run.name}</span>
+                      <span
+                        className="run-selector-name"
+                        role="button"
+                        tabIndex={0}
+                        title="查看此实验"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onChange([run.run_id]);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            onChange([run.run_id]);
+                          }
+                        }}
+                      >
+                        {run.name}
+                      </span>
                       <StatusBadge status={run.status} label={run.status_label} reason={run.status_reason} />
                       {run.primary_metric?.last ? (
                         <span className="run-selector-value">

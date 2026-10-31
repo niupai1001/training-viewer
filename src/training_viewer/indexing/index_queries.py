@@ -54,9 +54,11 @@ class IndexQueries:
         self.database = database
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._series_cache: dict[tuple, dict] = {}
+        self._metric_keys_cache: dict[str, list[dict]] = {}
 
     def invalidate_series_cache(self) -> None:
         self._series_cache.clear()
+        self._metric_keys_cache.clear()
 
     # ------------------------------------------------------------------ 运行目录树
     def projects(self) -> dict:
@@ -110,7 +112,7 @@ class IndexQueries:
         limit: int = 200,
         offset: int = 0,
     ) -> dict:
-        limit = max(1, min(int(limit), 1000))
+        limit = max(1, min(int(limit), 5000))
         offset = max(0, int(offset))
         conditions: list[str] = []
         parameters: list[Any] = []
@@ -420,7 +422,9 @@ class IndexQueries:
                 (run_id,),
             ).fetchall()
             sessions = self._sessions(connection, run_id)
-            metric_keys = self._metric_keys(connection, run_id, json.loads(row["metadata_json"]))
+            metric_keys = self._metric_keys_cached(
+                connection, run_id, json.loads(row["metadata_json"])
+            )
             artifact_tags = connection.execute(
                 """
                 SELECT tag, artifact_type, COUNT(*) AS count
@@ -539,9 +543,17 @@ class IndexQueries:
             ).fetchone()
             if row is None:
                 return None
-            return self._metric_keys(
+            return self._metric_keys_cached(
                 connection, run_id, json.loads(row["metadata_json"])
             )
+
+    def _metric_keys_cached(self, connection, run_id: str, metadata: dict) -> list[dict]:
+        cached = self._metric_keys_cache.get(run_id)
+        if cached is not None:
+            return cached
+        keys = self._metric_keys(connection, run_id, metadata)
+        self._metric_keys_cache[run_id] = keys
+        return keys
 
     def _metric_keys(self, connection, run_id: str, metadata: dict) -> list[dict]:
         rows = connection.execute(
@@ -728,7 +740,7 @@ class IndexQueries:
             if run_row is None:
                 return {"run_id": run_id, "axis": axis, "series": [], "warnings": []}
             metadata = json.loads(run_row["metadata_json"])
-            available = self._metric_keys(connection, run_id, metadata)
+            available = self._metric_keys_cached(connection, run_id, metadata)
             series = []
             warnings: list[dict] = []
             for key in series_keys:
@@ -1090,7 +1102,7 @@ class IndexQueries:
                     }
                 )
             metric_maps = {
-                row["run_id"]: self._metric_keys(
+                row["run_id"]: self._metric_keys_cached(
                     connection, row["run_id"], json.loads(row["metadata_json"])
                 )
                 for row in run_rows

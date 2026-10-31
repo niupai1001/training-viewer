@@ -50,10 +50,11 @@
 
 **界面**
 
-- 新增 `TrainingWorkspacePage`：左侧运行树/多选，右侧单 Run 或自动叠加共同指标；高级抽屉放配置、诊断、来源清单；旧 `/`、`/runs`、`/runs/:id`、`/compare` 全部路由转发。
+- 新增 `TrainingWorkspacePage`：左侧唯一运行树/多选，右侧单 Run 或自动叠加共同指标；旧 `/`、`/runs`、`/runs/:id`、`/compare` 全部路由转发。
 - 首次打开优先恢复 `localStorage` 上次主动选择的 Run；示例（合成元数据）不优先抢占真实运行。
-- 新增来源映射面板，用户可选文件、命名逻辑实验、撤销归并。
-- 单 Run 主区最多 2 个核心曲线；比较自动选 Train Loss + 验证 max 指标；不插值、不默认排名。
+- 单 Run 主区固定两个指标槽位（`maxSelected=2`），高级轴/平滑/对数轴收进 `<details>`；比较默认取所有选中 Run 的共同指标。
+- 项目/实验组深链接同时按 `project` 和 `experiment` 过滤；行名点击切换到该实验，复选框专门加入对比；运行列表初次 1000 条，可按 1000 递增加载到 5000。
+- 新增来源映射面板，用户可选文件、命名逻辑实验、撤销归并；保存前校验跨目录、重复成员、重复归属和 TVLP 冲突，同 ID 成员变更会重建索引。
 - 保留 `MetricChart`、ECharts、API 与结果页；旧总览/实验库/对比/运行详情页文件已删除，旧路由转发到工作区。
 
 ## 3. 为什么这样改
@@ -78,12 +79,13 @@
 
 ## 5. 验证结果
 
-- `pytest -q`：**91 passed，2 skipped**（Windows 符号链接限制）。
+- `pytest -q`：**92 passed，2 skipped**（Windows 符号链接限制）。
 - `ruff check src tests tools --select F,E9`：通过。
 - `npm run typecheck`：通过。
 - `npm run test`：MetricChart 生命周期/缩放回调测试（3）通过。
 - `npm run build`：通过。
-- `npm run e2e`：真实 Chrome 1440×900、1366×768 工作区/多选/诊断，无 console error。
+- `npm run e2e`：真实 Chrome 1440×900、1366×768 工作区/多选/项目筛选/缩放/诊断，无 console error。
+- `npm run e2e:live`：临时 imported JSONL 追加一行后，曲线点数 1→2，验证不依赖 `running` 状态。
 - 新增 `.github/workflows/ci.yml` 的 Ubuntu/Windows/macOS × Python 3.11/3.13 矩阵；本次未实际运行该远端 CI。
 - 示例来源清单：7 个来源、4 个逻辑实验（`audit/run_inventory_examples.csv`）。
 - 百万点与 MLflow 10k 数据：见 `docs/performance.md`。

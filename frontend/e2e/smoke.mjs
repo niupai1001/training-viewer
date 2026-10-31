@@ -26,6 +26,10 @@ async function assertViewport(width, height, suffix) {
 
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await page.getByRole("heading", { name: "训练工作区", exact: true }).waitFor();
+  if (await page.locator(".project-tree").count()) {
+    throw new Error("工作区仍存在重复的项目树导航");
+  }
+  await page.getByText(/已选 2 \/ 2/).waitFor();
   await page.locator(".workspace-tree").waitFor();
   await page.locator(".metric-chart-canvas canvas").first().waitFor({ timeout: 15000 });
   await page.screenshot({
@@ -42,17 +46,29 @@ async function assertViewport(width, height, suffix) {
     await page.getByText(/当前只查询/).waitFor({ state: "hidden", timeout: 10000 });
   }
 
-  const items = page.locator(".run-selector-item");
-  const count = Math.min(await items.count(), 2);
-  for (let index = 0; index < count; index += 1) {
-    await items.nth(index).locator('input[type="checkbox"]').check();
-  }
+  await page.locator(".run-selector-name").filter({ hasText: /^Live SegFormer review run$/ }).click();
+  await page
+    .locator(".run-selector-item")
+    .filter({ hasText: "Epoch-only validation run" })
+    .locator('input[type="checkbox"]')
+    .check();
   await page.getByText(/个训练叠加/).waitFor({ timeout: 15000 });
   await page.locator(".metric-chart-canvas canvas").first().waitFor({ timeout: 15000 });
   await page.screenshot({
     path: path.join(screenshotDir, `comparison-${suffix}.png`),
     fullPage: true,
   });
+
+  await page.goto(
+    `${baseUrl}#/runs?project=alpha&experiment=${encodeURIComponent("文件导入")}`,
+    { waitUntil: "domcontentloaded" },
+  );
+  await page.getByText(/筛选：alpha/).waitFor({ timeout: 15000 });
+  if ((await page.locator(".run-selector-project").count()) !== 1) {
+    throw new Error("项目/实验组筛选没有收敛到单个项目");
+  }
+  await page.getByRole("link", { name: "清除" }).click();
+  await page.getByText(/筛选：alpha/).waitFor({ state: "hidden", timeout: 15000 });
 
   await page.goto(`${baseUrl}#/diagnostics`, { waitUntil: "domcontentloaded" });
   await page.getByRole("heading", { name: "设置与诊断", exact: true }).waitFor();

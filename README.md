@@ -282,9 +282,9 @@ npm run build
 
 构建产物输出到 `src/training_viewer/web/`，并随 Python 包一起安装。开发前端时可以运行 `npm run dev`（Vite 端口 5173，代理 `/api` 到 8765），同时用 `training-viewer serve` 启动后端。
 
-测试覆盖：完整行/半行/坏行、截断重建、重复导入、断点续训、状态/活动分离、同 Step 多阶段、自动横轴、CSV 映射、TensorBoard 标量、任意 CSV/TSV/JSONL/文本、run_id 冲突、目录移动、增量扫描、降采样与原始 Best/Last、产物路径穿越、Host/Origin 校验、导出、CLI 校验、训练写入器与恢复会话。当前结果：**76 通过，2 跳过**（跳过的是 Windows 环境不允许创建符号链接的用例）。
+测试覆盖：完整行/半行/坏行、截断重建、重复导入、断点续训、状态/活动分离、同 Step 多阶段、自动横轴、CSV 映射、TensorBoard 标量、任意 CSV/TSV/JSONL/文本、run_id 冲突、目录移动、增量扫描、降采样与原始 Best/Last、产物路径穿越、Host/Origin 校验、导出、CLI 校验、训练写入器与恢复会话。后端当前结果见下方命令输出，不在正文重复写死数字。
 
-前端另有 3 个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 在 1440×900 与 1366×768 覆盖工作区、多选叠加、缩放区间和设置页。当前结果：**91 通过，2 跳过**。百万点、MLflow 原型与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
+前端另有 3 个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 在 1440×900 与 1366×768 覆盖工作区、多选叠加、项目筛选、缩放区间和设置页；`npm run e2e:live` 验证 imported JSONL 持续追加后曲线自动刷新。当前结果：**92 通过，2 跳过**。百万点、MLflow 原型与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
 
 ## 已知限制
 
@@ -307,7 +307,7 @@ npm run build
 - 没有用户的 62 个真实来源，未生成真实来源清单与 53→62 解释；工具为 `tools/export_source_inventory.py`。
 - 训练环境与查看器环境默认分离：`attach` 在查看器所在机器执行；跨机器场景只完成日志写入，由本机挂载或 SSH 隧道访问。
 
-性能上，曲线查询在 SQLite 内做最小-最大/首尾分桶并使用物化桶，Best/Last 始终基于全量原始记录。10 万点以内交互可用；100 万点索引约 44 秒、首次查询约 3.1 秒、索引库约 1.66 GB，尚未做缩放区间查询（见 [`docs/performance.md`](docs/performance.md)）。
+性能上，曲线查询在 SQLite 内做最小-最大/首尾分桶并使用物化桶，Best/Last 始终基于全量原始记录。10 万点以内交互可用；100 万点索引约 44 秒、首次查询约 3.1 秒、索引库约 1.66 GB；运行详情与工作区对比都支持缩放区间重查（见 [`docs/performance.md`](docs/performance.md)）。
 
 ## 文档与术语
 

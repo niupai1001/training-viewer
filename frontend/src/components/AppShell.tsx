@@ -23,7 +23,6 @@ export function AppShell({ connected }: { connected: boolean }) {
   const meta = useApi(() => api.meta(), [liveVersion]);
   const [navOpen, setNavOpen] = useState(false);
   const activeKey = resolveActiveKey(route.path);
-  const activeProject = route.path === "/runs" ? route.params.get("project") : null;
 
   return (
     <div className="app-shell">
@@ -56,42 +55,6 @@ export function AppShell({ connected }: { connected: boolean }) {
             </a>
           ))}
         </nav>
-
-        <section className="project-tree">
-          <h2>项目与实验组</h2>
-          {projects.loading && !projects.data ? <p className="muted small">正在加载…</p> : null}
-          {projects.error ? <p className="muted small">项目树加载失败：{projects.error.message}</p> : null}
-          {projects.data && projects.data.projects.length === 0 ? (
-            <p className="muted small">还没有项目。添加日志目录后会显示项目与实验组。</p>
-          ) : null}
-          {projects.data?.projects.map((project) => (
-            <div key={project.name} className="project-node">
-              <a
-                href={`#/runs?${new URLSearchParams({ project: project.name }).toString()}`}
-                className={`project-link ${activeProject === project.name ? "project-active" : ""}`}
-                title={`${project.name}：${project.run_count} 个运行`}
-                onClick={() => setNavOpen(false)}
-              >
-                <span>{project.name}</span>
-                <span className="count">{project.running_count > 0 ? `${project.running_count} 运行中` : project.run_count}</span>
-              </a>
-              {project.experiments.map((experiment) => (
-                <a
-                  key={`${project.name}-${experiment.name ?? "ungrouped"}`}
-                  href={`#/runs?${new URLSearchParams({
-                    project: project.name,
-                    ...(experiment.name ? { experiment: experiment.name } : {}),
-                  }).toString()}`}
-                  className="experiment-link"
-                  onClick={() => setNavOpen(false)}
-                >
-                  <span>{experiment.name ?? "未分组"}</span>
-                  <span className="count">{experiment.run_count}</span>
-                </a>
-              ))}
-            </div>
-          ))}
-        </section>
 
         <div className="sidebar-footer">
           <div className="root-summary">

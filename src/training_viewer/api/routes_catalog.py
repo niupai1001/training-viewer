@@ -92,7 +92,7 @@ def list_runs(
     dataset: str | None = None,
     favorite: bool | None = None,
     sort: str = "-last_updated_at",
-    limit: int = Query(default=200, ge=1, le=1000),
+    limit: int = Query(default=200, ge=1, le=5000),
     offset: int = Query(default=0, ge=0),
     service: TrainingViewerService = Depends(get_service),
 ) -> dict:

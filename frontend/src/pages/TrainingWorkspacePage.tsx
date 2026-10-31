@@ -30,7 +30,11 @@ const MAX_SELECTED = 8;
 export function TrainingWorkspacePage() {
   const route = useRoute();
   const liveVersion = useLiveVersion();
-  const runsState = useApi(() => api.runs({ limit: 200, sort: "-last_updated_at" }), [liveVersion]);
+  const [runLimit, setRunLimit] = useState(1000);
+  const runsState = useApi(() => api.runs({ limit: runLimit, sort: "-last_updated_at" }), [
+    liveVersion,
+    runLimit,
+  ]);
   const runs = runsState.data?.runs ?? [];
   const routeRun = /^\/runs\/([^/]+)$/.exec(route.path);
   const routeRuns = (route.params.get("runs") ?? "").split(",").filter(Boolean);
@@ -40,9 +44,12 @@ export function TrainingWorkspacePage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const initialized = useRef(selectedIds.length > 0);
   const projectFilter = route.params.get("project");
-  const visibleRuns = projectFilter
-    ? runs.filter((run) => run.project === projectFilter)
-    : runs;
+  const experimentFilter = route.params.get("experiment");
+  const visibleRuns = runs.filter(
+    (run) =>
+      (!projectFilter || run.project === projectFilter) &&
+      (!experimentFilter || (run.experiment ?? "") === experimentFilter),
+  );
 
   useEffect(() => {
     if (initialized.current || runs.length === 0) {
@@ -112,12 +119,28 @@ export function TrainingWorkspacePage() {
 
       <div className="workspace-layout">
         <aside className="workspace-tree">
+          {projectFilter ? (
+            <p className="filter-chip">
+              筛选：{projectFilter}
+              {experimentFilter ? ` / ${experimentFilter}` : ""}
+              <a href="#/">清除</a>
+            </p>
+          ) : null}
           <RunSelector
             runs={visibleRuns}
             selectedIds={selectedIds}
             onChange={select}
             maxSelected={MAX_SELECTED}
           />
+          {runsState.data && runsState.data.total > runs.length ? (
+            <button
+              type="button"
+              className="button button-small"
+              onClick={() => setRunLimit((current) => Math.min(current + 1000, 5000))}
+            >
+              加载更多（已显示 {runs.length} / {runsState.data.total}）
+            </button>
+          ) : null}
         </aside>
         <main className="workspace-main">
           {selectedIds.length === 0 ? (
@@ -246,7 +269,7 @@ function WorkspaceRunPanel({
           </button>
         </div>
       </section>
-      <RunMetricsTab run={currentRun} chartLimit={2} />
+      <RunMetricsTab run={currentRun} chartLimit={2} maxSelected={2} compactControls />
       <LatestArtifactPreview runId={currentRun.run_id} />
       <ResultCandidatePanel runId={currentRun.run_id} />
     </>
@@ -261,15 +284,29 @@ function WorkspaceComparison({
   selectedIds: string[];
 }) {
   const liveVersion = useLiveVersion();
-  const firstId = selectedIds[0];
-  const keysState = useApi(() => api.metricKeys(firstId), [firstId, liveVersion]);
+  const keysState = useApi(
+    () => Promise.all(selectedIds.map((runId) => api.metricKeys(runId))),
+    [selectedIds.join(","), liveVersion],
+  );
+  const commonKeys = useMemo<MetricKey[]>(() => {
+    const responses = keysState.data ?? [];
+    if (responses.length === 0) {
+      return [];
+    }
+    const keySets = responses.map(
+      (response) => new Set(response.metric_keys.map((metric) => metric.key)),
+    );
+    return responses[0].metric_keys.filter((metric) =>
+      keySets.every((keys) => keys.has(metric.key)),
+    );
+  }, [keysState.data]);
   const seriesKeys = useMemo(
     () =>
       recommendedCompareKeys(
-        keysState.data?.metric_keys ?? [],
+        commonKeys,
         window.localStorage.getItem("training-viewer.last-primary-metric"),
       ),
-    [keysState.data],
+    [commonKeys],
   );
   const [range, setRange] = useState<{ min: number; max: number } | null>(null);
   function updateRange(next: { min: number; max: number } | null) {

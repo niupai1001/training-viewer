@@ -9,13 +9,14 @@
 | 项目 | 状态 | 证据 / 说明 |
 |---|---|---|
 | P0-01 错误 50 条后有效行丢失 | **完成** | 四类读取器继续解析有效行；`tests/test_reader_error_limits.py`：60 坏 + 1000 好，四格式通过；重读幂等 |
-| P0-02 CUDA `0xC0000005` | **Blocked** | 本机无 torch/CUDA，未复现；writer 默认无后台线程、手动 `log_heartbeat`；`tools/cuda_writer_smoke.py` 矩阵脚本待真实环境运行 |
+| P0-02 单运行实时曲线依赖状态 | **完成** | `RunMetricsTab` 查询依赖 `liveVersion`，不再按 `running` 过滤；`npm run e2e:live` 验证 imported JSONL 追加 1→2 点自动刷新 |
+| P0-03 CUDA `0xC0000005` | **Blocked** | 本机无 torch/CUDA，未复现；writer 默认无后台线程、手动 `log_heartbeat`；`tools/cuda_writer_smoke.py` 矩阵脚本待真实环境运行 |
 | P1-03 Windows 文本字节游标 | **完成** | `plain_text_log_reader.py` 二进制读取；CRLF/中文/多字节/非法 UTF-8/半行测试 |
-| P1-04 来源/逻辑实验身份 | **Partial** | 通用文件默认一文件一 Run；显式 `run_id/session_id` 提取到来源清单；用户确认后 sidecar 归并可撤销；扫描继续下探子 Run。缺真实 62 来源，未做自动合并 |
+| P1-04 来源/逻辑实验身份 | **Partial** | 通用文件默认一文件一 Run；显式 `run_id/session_id` 提取到来源清单；用户确认后 sidecar 归并可撤销；保存前校验跨目录、重复成员、重复归属、TVLP 冲突；同 ID 成员变更会重建索引。缺真实 62 来源，未做自动合并 |
 | P1-05 百万点性能 | **Partial** | 物化桶 + 覆盖索引 + 区间查询；1M 首屏约 3.1 s、索引约 44 s、库约 1.66 GB；仍非秒开 |
 | P1-06 结果发现 | **Partial** | TensorBoard image 事件缓存 + 目录/文件名候选（未确认标记）；无 histogram/audio、多光谱/GeoTIFF 波段/掩膜 |
 | P1-07 插件生态 | **Partial** | Python 来源插件 manifest/状态/失败隔离与 `/plugins`；前端产物插件仍编译期内建（审阅允许首版如此） |
-| P1-08 比较交互 | **完成（首版）** | 统一工作区多选自动叠加；默认 Loss + 验证指标；Best/Last、超参数差异、不可排名原因；对比缩放接区间 |
+| P1-08 比较交互 | **完成（首版）** | 统一工作区多选自动叠加；比较默认指标取所有选中 Run 的共同指标，Loss + 验证指标；Best/Last、超参数差异、不可排名原因；对比缩放接区间 |
 | P1-09 上次 Run | **完成** | 浏览器本地记住主动选择；示例 Run 不优先抢占真实运行 |
 | P2-10 缓存/用户状态混用 | **完成** | `index.sqlite3` 可重建；`user_state.sqlite3` 保存根目录/备注/收藏/视图；删索引测试通过 |
 
@@ -45,7 +46,7 @@ python tools/cuda_writer_smoke.py
 
 当前本机结果：
 
-- `91 passed, 2 skipped`
+- `92 passed, 2 skipped`
 - 前端 3 个 Vitest 通过
 - E2E 通过（真实 Chrome，含滚轮缩放/重置）
 - 1M：索引 44.4 s，首次查询 3.14 s，库 1.66 GB
