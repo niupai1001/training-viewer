@@ -325,6 +325,7 @@ npm run build
 - [架构决策记录 ADR-001：存储后端](docs/adr/ADR-001-storage-backend.md)
 - [性能基准与限制](docs/performance.md)
 - [审计来源清单工具与证据边界](audit/README.md)
+- [深度审计交付状态与阻塞项](audit/STATUS.md)
 - 设计规范：[架构与协议 V1.1](Training_Viewer_Architecture_and_Protocol_v1.1.md)、[命名与文档规范](docs/documentation_and_naming_standard.md)
 
 首次出现的技术缩写及中文解释统一登记在[术语表](docs/glossary.md)。界面中的 mIoU、F1、Step、Epoch 等指标均可通过悬停提示或指标定义查看含义与单位。
