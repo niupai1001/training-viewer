@@ -63,6 +63,9 @@ Training Viewer 是本机日志消费者，不是训练调度器：
 | TensorBoard 来源 | `TensorBoardSourceAdapter` | 同上 | 事件文件目录 → 合成元数据的 Run |
 | CSV 指标来源 | `CsvSourceAdapter` | 同上 | `metrics.csv` 目录 → 合成元数据的 Run |
 | 通用日志文件来源 | `GenericLogFileSourceAdapter` | `source_adapters/generic_log_file_adapter.py` | 任意文件名 CSV/TSV/JSONL/文本 → 每文件一个 Run |
+| 逻辑实验解析器 | `LogicalRunOverrideStore` | `identity/logical_runs.py` | 用户确认的文件组 → 一个逻辑 Run；sidecar 可撤销 |
+| 用户状态存储 | `UserStateStore` | `user_state.py` | 根目录/备注/收藏/保存视图，与索引分库 |
+| 结果文件发现器 | `discover_result_files` | `results/discovery.py` | 事件之外的图片候选，明确未确认 |
 | 标准训练日志增量读取器 | `StandardTrainingLogReader` | `log_readers/standard_training_log_reader.py` | JSONL + 游标 → 指标/事件/产物记录 |
 | CSV 指标日志读取器 | `CsvMetricLogReader` | `log_readers/csv_metric_reader.py` | CSV + 列映射/分隔符 → 指标记录 |
 | 通用 JSONL 读取器 | `GenericJsonlMetricReader` | `log_readers/generic_jsonl_reader.py` | 扁平/类 TVLP JSONL → 指标记录 |
@@ -85,24 +88,29 @@ Training Viewer 是本机日志消费者，不是训练调度器：
 
 ## 4. SQLite 索引模型
 
-数据库文件：`<应用数据目录>/index.sqlite3`，开启 WAL。
+指标索引：`<应用数据目录>/index.sqlite3`，开启 WAL，可删除重建。
+用户状态：`<应用数据目录>/user_state.sqlite3`，保存根目录、备注、收藏、保存视图，**不可从日志重建**。
 
-| 表 | 内容 | 是否可从原始日志重建 |
-|---|---|---|
-| `watched_roots` | 用户显式添加的根目录 | 否（用户配置） |
-| `runs` | 运行身份、项目/实验组、状态、元数据 JSON、目录、最后更新时间 | 是 |
-| `metric_points` | `run_id、phase、metric_name、step、epoch、timestamp、session_id、value、来源文件/偏移` | 是 |
-| `artifacts` | 产物引用、角色、样本/分组、文件存在性与大小 | 是 |
-| `training_events` | 生命周期与心跳 | 是 |
-| `ingestion_cursors` | 每个文件已消费位置、文件身份、大小、mtime | 是 |
-| `ingestion_issues` | 行级/目录级解析问题 | 是 |
-| `run_annotations` | 用户备注与收藏 | 否（UI 数据） |
-| `saved_views` | 保存的对比视图 | 否（UI 数据） |
-| `run_conflicts` | 重复 `run_id` 的冲突记录 | 是（扫描重建） |
+| 表 | 内容 | 所在库 | 是否可重建 |
+|---|---|---|---|
+| `watched_roots` | 用户显式添加的根目录 | user_state | 否 |
+| `run_annotations` | 用户备注与收藏 | user_state | 否 |
+| `saved_views` | 保存的对比视图 | user_state | 否 |
+| `runs` | 运行身份、项目/实验组、状态、元数据 JSON、目录、最后更新时间 | index | 是 |
+| `metric_points` | `run_id、phase、metric_name、step、epoch、timestamp、session_id、value、来源文件/偏移` | index | 是 |
+| `artifacts` | 产物引用、角色、样本/分组、文件存在性与大小 | index | 是 |
+| `training_events` | 生命周期与心跳 | index | 是 |
+| `ingestion_cursors` | 每个文件已消费位置、文件身份、大小、mtime | index | 是 |
+| `ingestion_issues` | 行级/目录级解析问题 | index | 是 |
+| `run_conflicts` | 重复 `run_id` 的冲突记录 | index | 是（扫描重建） |
 
-关键索引：`(run_id, phase, metric_name, global_step)`、`(run_id, phase, metric_name, epoch)`、`(run_id, timestamp)`、`(project, experiment)`、`(run_id, tag)`、`(run_id, group_id)`。
+逻辑实验归并规则保存在 `<数据目录>/logical_runs.json`，不写训练目录；删除索引不会删除规则。
+
+关键索引：`(run_id, phase, metric_name, global_step)`、`(run_id, phase, metric_name, epoch)`、`(run_id, timestamp)`，并为曲线列增加覆盖索引；`(project, experiment)`、`(run_id, tag)`、`(run_id, group_id)`。`IndexDatabase` 通过 `ATTACH DATABASE ... AS user_state` 让查询层访问用户状态。
 
 **幂等键**：指标 `(run_id, source_file, source_offset, phase, metric_name)`（同一行的 train_loss 与 val_loss 可共存）；产物/事件 `(run_id, source_file, source_offset)`。因此重复扫描、查看器重启、文件重读都不会产生重复采样。v1 数据库启动时自动迁移到该键。
+
+**曲线查询**：先 `COUNT`，超过 `max_points` 时在 SQLite 内按桶取 min/max/首/尾，最多返回 `max_points`；`Best`/`Last` 仍对原始点精确计算。结果按 `(run_id, phase, metric, axis, max_points)` 进程内缓存，写同步时失效。
 
 ## 5. 增量读取与一致性
 
@@ -174,7 +182,7 @@ Training Viewer 是本机日志消费者，不是训练调度器：
 | 实验产物视图 | 实现 `ArtifactViewPlugin`，调用 `registerArtifactViewPlugin` | 是 |
 | VS Code 入口 | 命令调用同一命令行/本机 REST | 否 |
 
-V1 不实现第三方代码热加载。插件异常被记录并跳过，不阻止内置来源工作。
+V1 不实现第三方代码热加载。插件异常被记录并跳过，不阻止内置来源工作。Python 来源插件应提供 `plugin_manifest`（`name`、`version`、`adapter_id`、`capabilities`，可选 `description`/`requires`/`settings`）；缺失 manifest 仍以兼容模式加载但状态为 `missing-manifest`，加载失败记录在 `GET /plugins` 的 `status/error`。前端产物插件仍是编译期内建注册表，不宣称“安装任意前端插件即可生效”。
 
 ## 11. 配置与默认值
 

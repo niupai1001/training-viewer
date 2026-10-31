@@ -13,7 +13,12 @@ from ..system_directory_picker import (
     select_directory_with_system_dialog,
 )
 from .dependencies import get_exporter_registry, get_service
-from .request_models import AnnotationUpdateRequest, RootCreateRequest, SavedViewCreateRequest
+from .request_models import (
+    AnnotationUpdateRequest,
+    LogicalRunOverrideRequest,
+    RootCreateRequest,
+    SavedViewCreateRequest,
+)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -189,6 +194,49 @@ def rescan(service: TrainingViewerService = Depends(get_service)) -> dict:
 @router.get("/saved-views")
 def list_saved_views(service: TrainingViewerService = Depends(get_service)) -> dict:
     return {"saved_views": service.queries.list_saved_views()}
+
+
+@router.get("/logical-runs/overrides")
+def list_logical_run_overrides(
+    service: TrainingViewerService = Depends(get_service),
+) -> dict:
+    return {"overrides": service.list_logical_overrides()}
+
+
+@router.post("/logical-runs/overrides")
+def save_logical_run_override(
+    payload: LogicalRunOverrideRequest,
+    service: TrainingViewerService = Depends(get_service),
+) -> dict:
+    try:
+        return service.save_logical_override(
+            payload.logical_run_id, payload.name, payload.files, payload.reason
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.delete("/logical-runs/overrides/{logical_run_id}")
+def delete_logical_run_override(
+    logical_run_id: str,
+    service: TrainingViewerService = Depends(get_service),
+) -> dict:
+    if not service.delete_logical_override(logical_run_id):
+        raise HTTPException(status_code=404, detail=f"找不到逻辑实验映射：{logical_run_id}")
+    return {"deleted": logical_run_id}
+
+
+@router.get("/plugins")
+def plugins(service: TrainingViewerService = Depends(get_service)) -> dict:
+    return {
+        "plugins": service.registry.plugin_records,
+        "note": "仅 Python 日志来源适配器支持 entry point 插件；前端产物视图仍为编译期内建注册表。",
+    }
+
+
+@router.get("/audit/sources")
+def audit_sources(service: TrainingViewerService = Depends(get_service)) -> dict:
+    return {"sources": service.queries.source_inventory()}
 
 
 @router.get("/saved-views/{view_id}")

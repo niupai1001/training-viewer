@@ -84,6 +84,11 @@ def main() -> int:
         run["run_id"], ["train/loss", "val/miou"], "auto", 2000
     )
     query_seconds = time.perf_counter() - started
+    started = time.perf_counter()
+    service.queries.query_series(
+        run["run_id"], ["train/loss", "val/miou"], "auto", 2000
+    )
+    cached_query_seconds = time.perf_counter() - started
     database_bytes = paths.database_file.stat().st_size
     result = {
         "points": args.points,
@@ -91,6 +96,7 @@ def main() -> int:
         "index_seconds": round(index_seconds, 3),
         "metric_keys_seconds": round(metrics_seconds, 3),
         "query_seconds": round(query_seconds, 3),
+        "cached_query_seconds": round(cached_query_seconds, 4),
         "database_megabytes": round(database_bytes / (1024 * 1024), 2),
         "series": [
             {

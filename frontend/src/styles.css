@@ -2151,7 +2151,213 @@ textarea {
   align-items: flex-start;
 }
 
-/* ---------------------------------------------------------------- 监控首页 */
+/* ---------------------------------------------------------------- 训练工作区 */
+.workspace-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.workspace-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.workspace-toolbar h1 {
+  font-size: 24px;
+  margin: 0;
+}
+
+.workspace-toolbar p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+}
+
+.workspace-toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.workspace-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.workspace-tree {
+  position: sticky;
+  top: 76px;
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 10px;
+}
+
+.workspace-tree .run-selector {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.workspace-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.workspace-run-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.workspace-run-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.workspace-run-title h2 {
+  font-size: 22px;
+}
+
+.workspace-run-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.result-candidates {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 14px 16px;
+}
+
+.result-candidates h2 {
+  font-size: 14px;
+}
+
+.result-candidates > header p {
+  margin: 3px 0 10px;
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.advanced-drawer {
+  width: min(760px, 92vw);
+  height: 100%;
+  overflow: auto;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  padding: 18px;
+  box-shadow: -8px 0 30px rgba(15, 23, 42, 0.18);
+}
+
+.advanced-drawer > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.advanced-drawer > header h2 {
+  font-size: 20px;
+}
+
+.advanced-drawer .config-tab,
+.advanced-drawer .diagnostics-tab {
+  margin-bottom: 16px;
+}
+
+.drawer-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  font-size: 13px;
+}
+
+.mapping-list {
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 10px 0;
+}
+
+.mapping-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.mapping-row:last-child {
+  border-bottom: none;
+}
+
+.mapping-row .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapping-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.mapping-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mapping-form input {
+  min-width: 180px;
+}
+
+.mapping-heading {
+  font-size: 13px;
+  margin: 16px 0 6px;
+}
+
+@media (max-width: 1000px) {
+  .workspace-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-tree {
+    position: static;
+    max-height: 360px;
+  }
+  .workspace-run-header {
+    flex-direction: column;
+  }
+}
 .monitor-hero {
   display: flex;
   justify-content: space-between;

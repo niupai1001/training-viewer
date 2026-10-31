@@ -1,0 +1,9 @@
+source_path,parser,run_id,raw_run_identifier,logical_run_id,merged,confidence,project,name,point_count,bytes_read,file_size
+examples\csv_training_log\events.jsonl,events,5b8e2c41-7d3a-4f90-8c62-1e9a0b4d7f35,5b8e2c41-7d3a-4f90-8c62-1e9a0b4d7f35,5b8e2c41-7d3a-4f90-8c62-1e9a0b4d7f35,False,canonical,disaster-detection,CSV 指标日志适配示例｜逻辑回归基线,9,388,388
+examples\csv_training_log\metrics.csv,csv,5b8e2c41-7d3a-4f90-8c62-1e9a0b4d7f35,5b8e2c41-7d3a-4f90-8c62-1e9a0b4d7f35,5b8e2c41-7d3a-4f90-8c62-1e9a0b4d7f35,False,canonical,disaster-detection,CSV 指标日志适配示例｜逻辑回归基线,9,6,309
+examples\segformer_wavelength_encoder\events.jsonl,events,2f4d1b7e-6c2a-4b8f-9e31-5a0d7c4e8b12,2f4d1b7e-6c2a-4b8f-9e31-5a0d7c4e8b12,2f4d1b7e-6c2a-4b8f-9e31-5a0d7c4e8b12,False,canonical,disaster-detection,SegFormer 波长条件化输入｜10 波段｜随机种子 43,20,1274,1274
+examples\segformer_wavelength_encoder\metrics.jsonl,metrics,2f4d1b7e-6c2a-4b8f-9e31-5a0d7c4e8b12,2f4d1b7e-6c2a-4b8f-9e31-5a0d7c4e8b12,2f4d1b7e-6c2a-4b8f-9e31-5a0d7c4e8b12,False,canonical,disaster-detection,SegFormer 波长条件化输入｜10 波段｜随机种子 43,20,1186,1186
+examples\segformer_baseline\events.jsonl,events,7c9f6ad4-0ab2-431c-9694-e8a95c9493f6,7c9f6ad4-0ab2-431c-9694-e8a95c9493f6,7c9f6ad4-0ab2-431c-9694-e8a95c9493f6,False,canonical,disaster-detection,segformer-baseline,10,800,800
+examples\segformer_baseline\metrics.jsonl,metrics,7c9f6ad4-0ab2-431c-9694-e8a95c9493f6,7c9f6ad4-0ab2-431c-9694-e8a95c9493f6,7c9f6ad4-0ab2-431c-9694-e8a95c9493f6,False,canonical,disaster-detection,segformer-baseline,10,592,592
+examples\tensorboard_scalars\events.out.tfevents.1793437544.training-viewer-example,tensorboard,tensorboard-52232d24fdf641ee,tensorboard-52232d24fdf641ee,tensorboard-52232d24fdf641ee,False,synthetic,examples,tensorboard_scalars,33,34,1600
+

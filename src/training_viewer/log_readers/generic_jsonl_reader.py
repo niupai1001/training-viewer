@@ -22,7 +22,6 @@ from .base import (
 )
 from .csv_metric_reader import _phase_and_metric_name
 
-MAX_REPORTED_ISSUES_PER_READ = 50
 _METADATA_KEYS = {
     "timestamp",
     "time",
@@ -101,12 +100,11 @@ class GenericJsonlMetricReader:
         source_file = relative_source_path(run_directory, file_path)
         current_offset = start_offset
         current_line = line_number
-        reported = 0
         for raw_line in complete.splitlines(keepends=True):
             offset = current_offset
             current_offset += len(raw_line)
             current_line += 1
-            if not raw_line.strip() or reported >= MAX_REPORTED_ISSUES_PER_READ:
+            if not raw_line.strip():
                 continue
             try:
                 payload_object = load_json_line(raw_line.strip())
@@ -117,7 +115,6 @@ class GenericJsonlMetricReader:
                 )
                 result.records.extend(records)
             except (UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
-                reported += 1
                 result.add_issue(
                     str(file_path),
                     current_line - 1,
@@ -136,6 +133,7 @@ class GenericJsonlMetricReader:
             result.add_issue(
                 str(file_path), current_line, "文件末尾存在尚未写完的 JSON 行，等待补齐", "warning"
             )
+        result.finalize_issues(str(file_path))
         return result
 
     def _parse_record(

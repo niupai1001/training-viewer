@@ -51,9 +51,11 @@ npm run dev
 python tools/benchmark_viewer.py --points 100000
 python tools/benchmark_viewer.py --points 1000000
 python tools/benchmark_tensorboard.py
+python tools/cuda_writer_smoke.py
+python tools/export_source_inventory.py --data-dir <数据目录> --root D:/outputs --output audit/run_inventory.csv
 ```
 
-结果与限制见 [`docs/performance.md`](performance.md)。
+CUDA 矩阵在无 torch/CUDA 时返回 `skipped`；MLflow spike 需要可选 `mlflow-skinny`，只用于 ADR 对照，不进入生产依赖。结果与限制见 [`docs/performance.md`](performance.md)。
 
 Vite 开发服务器默认 `http://127.0.0.1:5173`，把 `/api` 代理到 `http://127.0.0.1:8765`。另开终端启动后端：
 
@@ -121,12 +123,14 @@ C:\temp\tv-check\Scripts\training-viewer.exe open examples --no-browser
 
 | 路径 | 内容 |
 |---|---|
-| `%LOCALAPPDATA%\TrainingViewer\index.sqlite3` | 索引与界面数据 |
+| `%LOCALAPPDATA%\TrainingViewer\index.sqlite3` | 可重建的指标索引 |
+| `%LOCALAPPDATA%\TrainingViewer\user_state.sqlite3` | 根目录、备注、收藏、保存视图；不可重建，删除前备份 |
+| `%LOCALAPPDATA%\TrainingViewer\logical_runs.json` | 用户确认的逻辑实验归并规则 |
 | `%LOCALAPPDATA%\TrainingViewer\instance.json` | 当前实例的 URL/端口/PID |
 | `src/training_viewer/web/` | 构建后的前端 |
 
 - 覆盖数据目录：`--data-dir` 或 `TRAINING_VIEWER_DATA_DIR`。
-- 重建索引：停止服务，删除 `index.sqlite3`，重启并重新添加根目录。
+- 重建索引：停止服务，删除 `index.sqlite3`，重启并重新添加根目录；`user_state.sqlite3` 不会被清空。
 - 查看 API：`/docs`。
 - 日志：终端输出；后台线程异常以 `training_viewer.*` logger 记录。
 

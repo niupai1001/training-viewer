@@ -15,6 +15,7 @@ from typing import Literal, Union
 SCHEMA_VERSION = "1.0"
 
 RecordSeverity = Literal["error", "warning"]
+MAX_REPORTED_ISSUES_PER_READ = 50
 
 
 class ReaderUnavailableError(RuntimeError):
@@ -120,9 +121,28 @@ class ReadResult:
     issues: list[ParseIssue] = field(default_factory=list)
     cursor: FileCursor | None = None
     reset: bool = False
+    total_issue_count: int = 0
+    suppressed_issue_count: int = 0
 
     def add_issue(self, file_path: str, line_number: int, message: str, severity: str = "error") -> None:
+        """记录问题，但只保留前 50 条详情；有效记录仍必须继续解析。"""
+        self.total_issue_count += 1
+        if len(self.issues) >= MAX_REPORTED_ISSUES_PER_READ:
+            self.suppressed_issue_count += 1
+            return
         self.issues.append(ParseIssue(file_path, line_number, message, severity))  # type: ignore[arg-type]
+
+    def finalize_issues(self, file_path: str) -> None:
+        if self.suppressed_issue_count:
+            self.issues.append(
+                ParseIssue(
+                    file_path,
+                    0,
+                    f"还有 {self.suppressed_issue_count} 条问题未逐条展示"
+                    f"（共 {self.total_issue_count} 条，详情已截断；有效记录未跳过）。",
+                    "warning",
+                )
+            )
 
 
 def utc_now_iso() -> str:

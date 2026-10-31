@@ -177,10 +177,10 @@ class CsvSourceAdapter:
 
 def build_builtin_source_adapter_registry() -> SourceAdapterRegistry:
     registry = SourceAdapterRegistry()
-    registry.register(StandardTvlpSourceAdapter())
-    registry.register(TensorBoardSourceAdapter())
-    registry.register(CsvSourceAdapter())
-    registry.register(GenericLogFileSourceAdapter())
+    registry.register(StandardTvlpSourceAdapter(), builtin=True)
+    registry.register(TensorBoardSourceAdapter(), builtin=True)
+    registry.register(CsvSourceAdapter(), builtin=True)
+    registry.register(GenericLogFileSourceAdapter(), builtin=True)
     _load_entry_point_adapters(registry)
     return registry
 
@@ -197,10 +197,25 @@ def _load_entry_point_adapters(registry: SourceAdapterRegistry) -> None:
         try:
             loaded = entry_point.load()
             adapter = loaded() if isinstance(loaded, type) else loaded
-            registry.register(adapter)
+            manifest = getattr(adapter, "plugin_manifest", None)
+            if manifest is None:
+                LOGGER.warning(
+                    "日志来源插件 %s 缺少 plugin_manifest；按内置兼容模式加载", entry_point.name
+                )
+            elif not isinstance(manifest, dict) or not {
+                "name",
+                "version",
+                "adapter_id",
+                "capabilities",
+            }.issubset(manifest):
+                raise ValueError(
+                    "plugin_manifest 必须包含 name/version/adapter_id/capabilities"
+                )
+            registry.register(adapter, manifest)
             LOGGER.info("已加载第三方日志来源适配器：%s", entry_point.name)
         except Exception as error:  # noqa: BLE001 - 插件失败不能阻止主程序
             LOGGER.warning("加载日志来源插件 %s 失败：%s", entry_point.name, error)
+            registry.record_plugin_failure(entry_point.name, str(error))
 
 
 __all__ = [

@@ -129,7 +129,7 @@ with TrainingRunWriter(
     run_id=RESUME_RUN_ID,
     run_directory=RUN_DIR,
     resume=bool(RESUME_RUN_ID),
-    heartbeat_interval_seconds=30,
+    heartbeat_interval_seconds=0,  # 默认无后台线程；由训练主线程手动心跳
 ) as run:
     # 让检查点或配置记住 run.run_id / run.run_directory，断点续训时复用
     for epoch in range(1, epochs + 1):
@@ -143,6 +143,7 @@ with TrainingRunWriter(
                     global_step=global_step,
                     epoch=epoch,
                 )
+                run.log_heartbeat(global_step=global_step)
 
         metrics = validate(model, val_loader)  # 返回真实计算的指标
         run.log_metrics(
@@ -170,7 +171,7 @@ with TrainingRunWriter(
         )
 ```
 
-上下文管理器会自动写 `started`、心跳和 `completed`；训练异常时写 `failed` 并重新抛出异常。如果必须手动控制，也可以 `run.start()` / `run.finish()`，但必须保证 `finish` 执行。
+上下文管理器会自动写 `started` 和 `completed`；训练异常时写 `failed` 并重新抛出异常。默认不创建后台心跳线程（`heartbeat_interval_seconds=0`），由训练主线程在写指标时调用 `run.log_heartbeat(...)`；只有明确需要异步心跳时才传大于 0 的间隔。如果必须手动控制，也可以 `run.start()` / `run.finish()`，但必须保证 `finish` 执行。
 
 ### 只记录训练 Loss 的最小示例
 

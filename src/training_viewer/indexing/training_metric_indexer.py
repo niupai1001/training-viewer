@@ -373,6 +373,31 @@ class TrainingMetricIndexer:
             self._prune_issues(connection)
 
     # ------------------------------------------------------------------ 内部实现
+    def delete_run(self, run_id: str) -> bool:
+        with self.database.transaction() as connection:
+            exists = connection.execute(
+                "SELECT 1 FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if exists is None:
+                return False
+            self._delete_run(connection, run_id)
+        return True
+
+    def delete_runs_for_source_files(self, file_paths: list[str]) -> list[str]:
+        """删除包含指定原始文件索引的 Run；用于逻辑归并前的旧身份清理。"""
+        if not file_paths:
+            return []
+        placeholders = ",".join("?" for _ in file_paths)
+        with self.database.transaction() as connection:
+            rows = connection.execute(
+                f"SELECT DISTINCT run_id FROM ingestion_cursors WHERE file_path IN ({placeholders})",
+                file_paths,
+            ).fetchall()
+            run_ids = [row["run_id"] for row in rows]
+            for run_id in run_ids:
+                self._delete_run(connection, run_id)
+        return run_ids
+
     def _delete_run(self, connection: sqlite3.Connection, run_id: str) -> None:
         self._delete_run_data(connection, run_id)
         connection.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))

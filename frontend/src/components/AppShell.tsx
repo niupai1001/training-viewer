@@ -4,20 +4,16 @@ import { useApi } from "../hooks/useApi";
 import { useLiveVersion } from "../live/LiveUpdates";
 import { useRoute } from "../navigation/route";
 import type { RouteInfo } from "../navigation/route";
-import { OverviewPage } from "../pages/OverviewPage";
-import { ExperimentsPage } from "../pages/ExperimentsPage";
-import { RunDetailPage } from "../pages/RunDetailPage";
-import { ComparisonPage } from "../pages/ComparisonPage";
+import { TrainingWorkspacePage } from "../pages/TrainingWorkspacePage";
 import { ResultsPage } from "../pages/ResultsPage";
 import { DiagnosticsPage } from "../pages/DiagnosticsPage";
 import { EmptyState } from "./Common";
 
-type NavigationKey = "overview" | "experiments" | "compare" | "results" | "diagnostics";
+type NavigationKey = "overview" | "diagnostics";
 
 const NAV_ITEMS: { key: NavigationKey; label: string; href: string; icon: string }[] = [
-  { key: "overview", label: "监控", href: "#/", icon: "◉" },
-  { key: "experiments", label: "实验库", href: "#/runs", icon: "▤" },
-  { key: "compare", label: "对比", href: "#/compare", icon: "⇄" },
+  { key: "overview", label: "工作区", href: "#/", icon: "◉" },
+  { key: "diagnostics", label: "设置与诊断", href: "#/diagnostics", icon: "⚙" },
 ];
 
 export function AppShell({ connected }: { connected: boolean }) {
@@ -147,14 +143,11 @@ function resolveActiveKey(path: string): NavigationKey {
   if (path === "/" || path === "") {
     return "overview";
   }
-  if (path.startsWith("/runs")) {
-    return "experiments";
+  if (path === "/runs" || path.startsWith("/runs/") || path === "/compare" || path === "/") {
+    return "overview";
   }
-  if (path.startsWith("/compare")) {
-    return "compare";
-  }
-  if (path.startsWith("/results")) {
-    return "experiments";
+  if (path === "/results") {
+    return "overview";
   }
   if (path.startsWith("/diagnostics")) {
     return "diagnostics";
@@ -164,18 +157,13 @@ function resolveActiveKey(path: string): NavigationKey {
 
 function RouteView({ route }: { route: RouteInfo }) {
   const path = route.path.replace(/\/+$/, "") || "/";
-  if (path === "/") {
-    return <OverviewPage />;
-  }
-  if (path === "/runs") {
-    return <ExperimentsPage />;
-  }
-  const runMatch = /^\/runs\/([^/]+)$/.exec(path);
-  if (runMatch) {
-    return <RunDetailPage runId={decodeURIComponent(runMatch[1])} />;
-  }
-  if (path === "/compare") {
-    return <ComparisonPage />;
+  if (
+    path === "/" ||
+    path === "/runs" ||
+    path === "/compare" ||
+    /^\/runs\/[^/]+$/.test(path)
+  ) {
+    return <TrainingWorkspacePage />;
   }
   if (path === "/results") {
     return <ResultsPage />;
@@ -188,7 +176,7 @@ function RouteView({ route }: { route: RouteInfo }) {
       <EmptyState
         title="页面不存在"
         description={`没有找到路径 ${path}。`}
-        action={<a className="button" href="#/">返回总览</a>}
+        action={<a className="button" href="#/">返回工作区</a>}
       />
     </div>
   );

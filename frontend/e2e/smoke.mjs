@@ -13,39 +13,52 @@ const browser = await chromium.launch({
   headless: true,
   args: ["--no-sandbox", "--disable-gpu", "--no-proxy-server"],
 });
-const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
-const errors = [];
-page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`));
-page.on("console", (message) => {
-  if (message.type() === "error") {
-    errors.push(`console: ${message.text()}`);
+
+async function assertViewport(width, height, suffix) {
+  const page = await browser.newPage({ viewport: { width, height } });
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`));
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      errors.push(`console: ${message.text()}`);
+    }
+  });
+
+  await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { name: "训练工作区", exact: true }).waitFor();
+  await page.locator(".workspace-tree").waitFor();
+  await page.locator(".metric-chart-canvas canvas").first().waitFor({ timeout: 15000 });
+  await page.screenshot({
+    path: path.join(screenshotDir, `workspace-${suffix}.png`),
+    fullPage: true,
+  });
+
+  const items = page.locator(".run-selector-item");
+  const count = Math.min(await items.count(), 2);
+  for (let index = 0; index < count; index += 1) {
+    await items.nth(index).locator('input[type="checkbox"]').check();
   }
-});
+  await page.getByText(/个训练叠加/).waitFor({ timeout: 15000 });
+  await page.locator(".metric-chart-canvas canvas").first().waitFor({ timeout: 15000 });
+  await page.screenshot({
+    path: path.join(screenshotDir, `comparison-${suffix}.png`),
+    fullPage: true,
+  });
 
-await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-await page.getByRole("heading", { name: "监控", exact: true }).waitFor();
-await page.getByText("当前/最近训练").waitFor();
-await page.locator(".metric-chart-canvas canvas").first().waitFor({ timeout: 15000 });
-await page.screenshot({ path: path.join(screenshotDir, "overview.png"), fullPage: true });
-
-await page.goto(`${baseUrl}#/runs`, { waitUntil: "domcontentloaded" });
-await page.getByRole("heading", { name: "实验库", exact: true }).waitFor();
-await page.locator(".experiment-table thead th").first().waitFor({ timeout: 15000 });
-const defaultHeaders = await page.locator(".experiment-table thead th").allInnerTexts();
-if (!defaultHeaders.includes("状态") || !defaultHeaders.includes("关键指标")) {
-  throw new Error(`实验库默认列异常：${defaultHeaders.join(" | ")}`);
+  await page.goto(`${baseUrl}#/diagnostics`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { name: "设置与诊断", exact: true }).waitFor();
+  await page.screenshot({
+    path: path.join(screenshotDir, `diagnostics-${suffix}.png`),
+    fullPage: true,
+  });
+  await page.close();
+  return errors;
 }
-await page.screenshot({ path: path.join(screenshotDir, "experiments.png"), fullPage: true });
 
-const firstRun = page.locator('.experiment-table tbody a[href^="#/runs/"]').first();
-await firstRun.click();
-await page.locator(".metric-chart-canvas canvas").first().waitFor({ timeout: 15000 });
-await page.screenshot({ path: path.join(screenshotDir, "run-detail.png"), fullPage: true });
-
-await page.goto(`${baseUrl}#/compare`, { waitUntil: "domcontentloaded" });
-await page.getByRole("heading", { name: "实验对比", exact: true }).waitFor();
-await page.screenshot({ path: path.join(screenshotDir, "compare.png"), fullPage: true });
-
+const errors = [
+  ...(await assertViewport(1440, 900, "1440x900")),
+  ...(await assertViewport(1366, 768, "1366x768")),
+];
 await browser.close();
 if (errors.length > 0) {
   console.error(errors.join("\n"));

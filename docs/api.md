@@ -23,12 +23,19 @@
 | GET | `/saved-views` / GET `/saved-views/{id}` / POST / DELETE `/saved-views/{id}` | 保存的对比视图；按 id 恢复完整状态 |
 | PUT | `/runs/{run_id}/annotation` | 保存备注/收藏，请求 `{"note": "...", "favorite": true}` |
 | GET | `/diagnostics` | 目录级问题、run_id 冲突、需要关注的运行 |
+| GET | `/audit/sources` | 来源文件 → 逻辑实验清单（parser、置信度、点数、是否归并） |
+| GET | `/logical-runs/overrides` / POST / DELETE `/logical-runs/overrides/{id}` | 用户确认的逻辑实验归并规则；sidecar 存在数据目录 |
+| GET | `/plugins` | Python 来源适配器清单、manifest、加载状态/错误；不包含前端动态插件 |
+| GET | `/runs/{run_id}/result-candidates` | 事件之外的结果图片候选，全部 `requires_confirmation=true` |
+| GET | `/runs/{run_id}/result-candidates/content?path=...` | 安全内联候选图片；只允许图片后缀且在 Run 目录内 |
 
 ### `/runs` 查询参数
 
 `project`、`experiment`、`status`、`q`（名称/ID/项目/模型/数据集模糊搜索）、`tag`、`task`、`model`、`dataset`、`favorite`、`sort`（字段前加 `-` 表示降序，默认 `-last_updated_at`）、`limit`（1–1000，默认 200）、`offset`。
 
 运行摘要包含 `status`/`status_label`/`status_reason` 与独立的 `activity`/`activity_label`。`activity` 只描述最近是否有新指标（`updating`/`idle`/`finished`/`unknown`），不能当作训练进程存在证明。
+
+`/health` 额外返回 `index_database`、`user_state_database`、`index_rebuildable=true`、`user_state_rebuildable=false`；删除索引库不应清空备注/收藏/保存视图。
 
 运行摘要还包含 `primary_metric`：第一个声明 min/max 方向的验证指标；没有方向时退化为最近写入的指标，只显示最终值。
 

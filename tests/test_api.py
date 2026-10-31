@@ -293,7 +293,7 @@ def test_artifact_content_is_denied_outside_registered_root(client) -> None:
     run = _run_by_name(test_client, "segformer-baseline")
     artifacts = test_client.get(f"/api/v1/runs/{run['run_id']}/artifacts").json()["artifacts"]
     assert artifacts
-    with service.database.transaction() as connection:
+    with service.user_state.transaction() as connection:
         connection.execute("DELETE FROM watched_roots")
     response = test_client.get(artifacts[0]["content_url"])
     assert response.status_code == 403

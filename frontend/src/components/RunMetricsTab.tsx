@@ -19,7 +19,7 @@ import { MetricChart } from "../components/MetricChart";
 
 const MAX_SELECTED_METRICS = 6;
 
-export function RunMetricsTab({ run }: { run: RunDetail }) {
+export function RunMetricsTab({ run, chartLimit }: { run: RunDetail; chartLimit?: number }) {
   const liveVersion = useLiveVersion();
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [phaseFilter, setPhaseFilter] = useState<string>("all");
@@ -206,7 +206,7 @@ export function RunMetricsTab({ run }: { run: RunDetail }) {
       ) : null}
 
       <div className="chart-stack">
-        {metricsState.data?.series.map((series) => (
+        {metricsState.data?.series.slice(0, chartLimit ?? metricsState.data.series.length).map((series) => (
           <MetricChart
             key={series.key}
             title={series.key}

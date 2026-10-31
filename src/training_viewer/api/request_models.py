@@ -24,6 +24,13 @@ class SavedViewCreateRequest(BaseModel):
     payload: dict = Field(default_factory=dict)
 
 
+class LogicalRunOverrideRequest(BaseModel):
+    logical_run_id: str = Field(min_length=1, max_length=200)
+    name: str = Field(min_length=1, max_length=200)
+    files: list[str] = Field(min_length=1, max_length=200)
+    reason: str = Field(default="user-confirmed", max_length=500)
+
+
 class CompareRequest(BaseModel):
     run_ids: list[str] = Field(min_length=1, max_length=50)
     series: list[str] = Field(default_factory=list, max_length=50)

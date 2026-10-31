@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from ..security.path_guard import UnsafeArtifactPathError, resolve_artifact_path
+from ..results.discovery import discover_result_files
 from ..service import TrainingViewerService
 from .dependencies import ensure_run_directory_allowed, get_service
 
@@ -68,6 +69,58 @@ def artifact_groups(
     if service.queries.get_run(run_id) is None:
         raise HTTPException(status_code=404, detail=f"找不到运行：{run_id}")
     return {"run_id": run_id, "groups": service.queries.artifact_groups(run_id, tag=tag)}
+
+
+@router.get("/runs/{run_id}/result-candidates")
+def result_candidates(
+    run_id: str, service: TrainingViewerService = Depends(get_service)
+) -> dict:
+    run = service.queries.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"找不到运行：{run_id}")
+    run_directory = ensure_run_directory_allowed(service, run["run_directory"])
+    known_paths = {
+        artifact["path"]
+        for artifact in service.queries.list_artifacts(run_id)
+        if artifact.get("path")
+    }
+    candidates = discover_result_files(run_directory, known_paths)
+    for candidate in candidates:
+        candidate["content_url"] = (
+            f"/api/v1/runs/{run_id}/result-candidates/content"
+            f"?path={candidate['path']}"
+        )
+    return {
+        "run_id": run_id,
+        "candidates": candidates,
+        "note": "路径/文件名推断只是候选；确认前不要作为科学结论。",
+    }
+
+
+@router.get("/runs/{run_id}/result-candidates/content")
+def result_candidate_content(
+    run_id: str,
+    path: str,
+    service: TrainingViewerService = Depends(get_service),
+) -> FileResponse:
+    run = service.queries.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"找不到运行：{run_id}")
+    run_directory = ensure_run_directory_allowed(service, run["run_directory"])
+    try:
+        resolved = resolve_artifact_path(run_directory, path)
+    except UnsafeArtifactPathError as error:
+        raise HTTPException(status_code=403, detail=f"结果路径被拒绝：{error}") from error
+    suffix = resolved.suffix.lower()
+    if suffix not in _INLINE_IMAGE_TYPES or not resolved.is_file():
+        raise HTTPException(status_code=404, detail="结果图片不存在或类型不允许预览。")
+    return FileResponse(
+        resolved,
+        media_type=_INLINE_IMAGE_TYPES[suffix],
+        filename=resolved.name,
+        content_disposition_type="inline",
+        headers=_SECURITY_HEADERS,
+    )
 
 
 def _resolve_artifact_file(service: TrainingViewerService, artifact_id: int) -> tuple[dict, Path]:

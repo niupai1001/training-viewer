@@ -37,7 +37,7 @@
 | 输入 | `metric_definitions` | 字典 | 键为 `phase/metric_name`，含 `direction`/`unit`/`definition`；`direction` 只能是 min/max/none，省略或 None 会规范为 none |
 | 输入 | `config`、`model`、`dataset`、`source`、`tags` | JSON 兼容值 | 写入 `run.json` |
 | 输入 | `session_id` | 字符串 | 可选；默认每次启动自动生成 |
-| 输入 | `heartbeat_interval_seconds` | 浮点或 `None` | 默认 30 秒；`0` 关闭 |
+| 输入 | `heartbeat_interval_seconds` | 浮点或 `None` | 默认 `0`（无后台线程）；大于 0 才启用异步心跳 |
 | 输入 | `resume` | 布尔 | `True` 时复用已存在的 Run 并写 `resumed` |
 | 输出 | `run.json` | JSON | 原子写入的元数据 |
 | 输出 | `metrics.jsonl` | JSONL | 每行一条指标记录 |
@@ -62,17 +62,17 @@
 1. 校验 `project`/`name`、运行目录参数与已有元数据（`resume`）。
 2. 新运行：`run.json` 写临时文件后 `os.replace`；恢复运行：保持原 `run_id` 与元数据不变。
 3. 以追加模式打开两个 JSONL 文件；写入 `started` 或 `resumed`。
-4. 可选心跳线程每 30 秒写一条 heartbeat，带最近一次 `global_step`。
+4. 默认不启动后台线程；训练主线程可调用 `log_heartbeat()`。只有显式传入 `heartbeat_interval_seconds>0` 才创建异步心跳线程。
 5. `log_metrics` 校验阶段、有限数字、Step/Epoch、`epoch_progress`，写入带 UTC 时间、`event_id`、`session_id` 的记录并 flush。
 6. `log_artifact` 校验相对路径和类型，写入带 `group_id`/`sample_id`/`role` 的事件。
-7. `finish` 停止心跳、写结束事件、关闭文件；重复调用安全。
+7. `finish` 停止（可选的）心跳线程、写结束事件、关闭文件；重复调用安全。
 8. 训练代码抛异常时，上下文管理器写 `failed` 后重新抛出。
 
 ## 配置与依赖
 
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
-| `heartbeat_interval_seconds` | `30` | `0` 或 `None` 关闭 |
+| `heartbeat_interval_seconds` | `0` | 默认无后台线程；大于 0 才启用异步心跳，训练主线程可随时 `log_heartbeat` |
 | `session_id` | 自动生成 | 每次进程启动唯一 |
 | `resume` | `False` | 已存在目录必须显式设 `True` |
 | 运行目录 | `<log_root>/<run_id>` | 也可显式 `run_directory` |

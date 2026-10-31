@@ -24,7 +24,6 @@ from .base import (
 )
 from .csv_metric_reader import _phase_and_metric_name
 
-MAX_REPORTED_ISSUES_PER_READ = 50
 _METRIC_TOKENS = {
     "loss",
     "accuracy",
@@ -198,35 +197,41 @@ class PlainTextLogReader:
         start_offset = 0 if reset else cursor.offset
         line_number = 1 if reset else cursor.line_number
         result.reset = reset
-        with file_path.open("r", encoding="utf-8", errors="replace") as handle:
+        with file_path.open("rb") as handle:
             handle.seek(start_offset)
-            text = handle.read()
-        last_newline = text.rfind("\n")
+            payload = handle.read()
+        last_newline = payload.rfind(b"\n")
         if last_newline < 0:
-            complete = ""
+            complete = b""
             new_offset = start_offset
         else:
-            complete = text[: last_newline + 1]
-            new_offset = start_offset + len(complete.encode("utf-8", errors="replace"))
+            complete = payload[: last_newline + 1]
+            new_offset = start_offset + len(complete)
         source_file = relative_source_path(run_directory, file_path)
-        reported = 0
         current_offset = start_offset
         current_line = line_number
         for raw_line in complete.splitlines(keepends=True):
             offset = current_offset
-            current_offset += len(raw_line.encode("utf-8", errors="replace"))
+            current_offset += len(raw_line)
+            line_index = current_line
             current_line += 1
-            if reported >= MAX_REPORTED_ISSUES_PER_READ:
-                continue
             try:
-                records = self._parse_line(raw_line.rstrip("\r\n"), source_file, offset, current_line - 1)
-                result.records.extend(records)
-            except (ValueError, UnicodeError) as error:
-                reported += 1
+                text = raw_line.decode("utf-8")
+            except UnicodeDecodeError as error:
                 result.add_issue(
                     str(file_path),
-                    current_line - 1,
-                    f"第 {current_line - 1} 行无法解析：{error}",
+                    line_index,
+                    f"第 {line_index} 行不是有效 UTF-8，未静默替换：{error}",
+                )
+                continue
+            try:
+                records = self._parse_line(text.rstrip("\r\n"), source_file, offset, line_index)
+                result.records.extend(records)
+            except (ValueError, UnicodeError) as error:
+                result.add_issue(
+                    str(file_path),
+                    line_index,
+                    f"第 {line_index} 行无法解析：{error}",
                 )
         result.cursor = FileCursor(
             file_path=str(file_path),
@@ -241,4 +246,5 @@ class PlainTextLogReader:
             result.add_issue(
                 str(file_path), current_line, "文件末尾行尚未写完，等待补齐", "warning"
             )
+        result.finalize_issues(str(file_path))
         return result

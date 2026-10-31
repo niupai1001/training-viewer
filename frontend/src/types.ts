@@ -368,6 +368,32 @@ export interface RootDirectory {
   added_at: string;
 }
 
+export interface SourceInventoryRow {
+  source_path: string | null;
+  parser: string;
+  run_id: string;
+  raw_run_identifier: string;
+  logical_run_id: string;
+  merged: boolean;
+  confidence: string;
+  project: string;
+  name: string;
+  point_count: number;
+  bytes_read?: number;
+  file_size?: number;
+}
+
+export interface ResultCandidate {
+  path: string;
+  role_guess: string | null;
+  sample_id: string;
+  epoch: number | null;
+  confidence: string;
+  requires_confirmation: boolean;
+  note: string;
+  content_url: string;
+}
+
 export interface ProjectTree {
   projects: ProjectNode[];
   roots: RootDirectory[];

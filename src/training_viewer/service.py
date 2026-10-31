@@ -17,9 +17,11 @@ from .discovery.run_directory_scanner import RunDirectoryScanner
 from .indexing.database import IndexDatabase
 from .indexing.index_queries import IndexQueries
 from .indexing.training_metric_indexer import TrainingMetricIndexer
+from .identity.logical_runs import LogicalRunOverride, LogicalRunOverrideStore
 from .log_readers.base import ParseIssue
 from .source_adapters.base import SourceAdapterRegistry
 from .source_adapters.builtin_adapters import build_builtin_source_adapter_registry
+from .user_state import UserStateStore
 
 LOGGER = logging.getLogger("training_viewer.service")
 
@@ -36,10 +38,15 @@ class TrainingViewerService:
         full_scan_interval_seconds: float = 300.0,
     ):
         self.paths = paths
-        self.database = IndexDatabase(paths.database_file)
+        self.user_state = UserStateStore(paths.user_state_file)
+        self.user_state.initialize()
+        self.database = IndexDatabase(paths.database_file, paths.user_state_file)
         self.database.initialize()
+        self.user_state.migrate_from_index(paths.database_file)
         self.registry = source_adapter_registry or build_builtin_source_adapter_registry()
         self.scanner = RunDirectoryScanner(self.registry)
+        self.logical_runs = LogicalRunOverrideStore(paths.data_dir / "logical_runs.json")
+        self.last_identity_audit: list[dict] = []
         self.indexer = TrainingMetricIndexer(self.database, now=now)
         self.queries = IndexQueries(self.database, now=now)
         self.scan_interval_seconds = scan_interval_seconds
@@ -58,11 +65,7 @@ class TrainingViewerService:
 
     # ------------------------------------------------------------------ 根目录
     def list_roots(self) -> list[dict]:
-        with self.database.connection() as connection:
-            rows = connection.execute(
-                "SELECT id, path, added_at FROM watched_roots ORDER BY id ASC"
-            ).fetchall()
-        return [dict(row) for row in rows]
+        return self.user_state.list_roots()
 
     def add_root(self, path: str) -> dict:
         raw_path = Path(path).expanduser()
@@ -71,40 +74,117 @@ class TrainingViewerService:
         if not raw_path.is_dir():
             raise ValueError(f"路径不是目录：{raw_path}")
         resolved = raw_path.resolve()
-        with self.database.connection() as connection:
-            existing = connection.execute(
-                "SELECT id, path, added_at FROM watched_roots WHERE path = ?",
-                (str(resolved),),
-            ).fetchone()
-            if existing is not None:
-                return dict(existing)
-        with self.database.transaction() as connection:
-            cursor = connection.execute(
-                "INSERT INTO watched_roots (path, added_at) VALUES (?, ?)",
-                (str(resolved), datetime.now(timezone.utc).isoformat()),
-            )
-            root_id = cursor.lastrowid
+        existing = self.user_state.find_root_by_path(str(resolved))
+        if existing is not None:
+            return existing
+        root = self.user_state.add_root(
+            str(resolved), datetime.now(timezone.utc).isoformat()
+        )
         LOGGER.info("已添加扫描根目录 %s", resolved)
         self.synchronize(force_full=True)
         self._refresh_watch_roots()
-        return {"id": root_id, "path": str(resolved), "added_at": datetime.now(timezone.utc).isoformat()}
+        return root
 
     def remove_root(self, root_id: int) -> bool:
-        with self.database.connection() as connection:
-            row = connection.execute(
-                "SELECT path FROM watched_roots WHERE id = ?", (root_id,)
-            ).fetchone()
-        if row is None:
+        root = self.user_state.remove_root(root_id)
+        if root is None:
             return False
         with self.database.transaction() as connection:
-            connection.execute("DELETE FROM watched_roots WHERE id = ?", (root_id,))
-            connection.execute("DELETE FROM runs WHERE root_path = ?", (row["path"],))
+            connection.execute("DELETE FROM runs WHERE root_path = ?", (root["path"],))
             connection.execute("DELETE FROM run_conflicts")
-        LOGGER.info("已移除扫描根目录 %s（原始文件未删除）", row["path"])
+        self.queries.invalidate_series_cache()
+        LOGGER.info("已移除扫描根目录 %s（原始文件未删除）", root["path"])
         self._publish({"version": self.version, "removed_root": root_id, "changed_runs": []})
         self.synchronize(force_full=True)
         self._refresh_watch_roots()
         return True
+
+    # ------------------------------------------------------------------ 逻辑实验
+    def list_logical_overrides(self) -> list[dict]:
+        return [
+            {
+                "logical_run_id": item.logical_run_id,
+                "name": item.name,
+                "files": item.files,
+                "reason": item.reason,
+                "created_at": item.created_at,
+            }
+            for item in self.logical_runs.load()
+        ]
+
+    def save_logical_override(
+        self, logical_run_id: str, name: str, files: list[str], reason: str = "user-confirmed"
+    ) -> dict:
+        roots = [Path(root["path"]).resolve() for root in self.list_roots()]
+        if not roots:
+            raise ValueError("请先添加日志根目录，再建立逻辑实验归并")
+        resolved_files: list[str] = []
+        for item in files:
+            path = Path(item).expanduser().resolve()
+            if not path.is_file():
+                raise ValueError(f"来源文件不存在：{path}")
+            if not any(path.is_relative_to(root) for root in roots):
+                raise ValueError(f"来源文件不在已添加的日志根目录内：{path}")
+            resolved_files.append(str(path))
+        if not resolved_files:
+            raise ValueError("至少选择一个来源文件")
+        override = LogicalRunOverride(
+            logical_run_id=logical_run_id.strip(),
+            name=name.strip(),
+            files=resolved_files,
+            reason=reason.strip() or "user-confirmed",
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        self.logical_runs.upsert(override)
+        self.synchronize(force_full=True)
+        return next(
+            item
+            for item in self.list_logical_overrides()
+            if item["logical_run_id"] == override.logical_run_id
+        )
+
+    def delete_logical_override(self, logical_run_id: str) -> bool:
+        before = {item.logical_run_id for item in self.logical_runs.load()}
+        if logical_run_id not in before:
+            return False
+        self.logical_runs.delete(logical_run_id)
+        self.indexer.delete_run(logical_run_id)
+        self.synchronize(force_full=True)
+        return True
+
+    def _apply_logical_overrides(self, discovered_runs: list[tuple]) -> list[tuple]:
+        if not discovered_runs:
+            return discovered_runs
+        resolved, audit = self.logical_runs.resolve([item[0] for item in discovered_runs])
+        self.last_identity_audit = audit
+        root_by_directory = {
+            str(item[0].run_directory): item[1] for item in discovered_runs
+        }
+        result = []
+        for discovered in resolved:
+            root_path = root_by_directory.get(str(discovered.run_directory))
+            if root_path is None:
+                continue
+            merged = (discovered.metadata.get("extensions") or {}).get(
+                "merged_source_run_ids"
+            )
+            if merged:
+                if not self._run_exists(discovered.run_id):
+                    file_paths = [
+                        str(spec.file_path) for spec in discovered.log_files
+                    ]
+                    self.indexer.delete_runs_for_source_files(file_paths)
+            result.append((discovered, root_path))
+        return result
+
+    def _run_exists(self, run_id: str) -> bool:
+        with self.database.connection() as connection:
+            return (
+                connection.execute(
+                    "SELECT 1 FROM runs WHERE run_id = ?", (run_id,)
+                ).fetchone()
+                is not None
+            )
 
     # ------------------------------------------------------------------ 同步
     def synchronize(self, force_full: bool = False) -> dict:
@@ -181,6 +261,7 @@ class TrainingViewerService:
                         for discovered in root_result.runs:
                             add_discovered(discovered, root_path)
 
+                discovered_runs = self._apply_logical_overrides(discovered_runs)
                 for discovered, root_path in discovered_runs:
                     try:
                         report = self.indexer.ingest(discovered, root_path)
@@ -205,6 +286,8 @@ class TrainingViewerService:
                 if full_scan:
                     self._mark_missing_directories(discovered_directories, changed_runs)
                 changed_runs.update(self.indexer.refresh_statuses())
+                if changed_runs:
+                    self.queries.invalidate_series_cache()
                 if full_scan:
                     self._replace_conflicts(conflicts)
                     self.indexer.replace_scan_issues(scan_issues)
@@ -355,6 +438,10 @@ class TrainingViewerService:
             "full_scan_interval_seconds": self.full_scan_interval_seconds,
             "last_sync_error": self.last_sync_error,
             "data_dir": str(self.paths.data_dir),
+            "index_database": str(self.paths.database_file),
+            "user_state_database": str(self.paths.user_state_file),
+            "index_rebuildable": True,
+            "user_state_rebuildable": False,
         }
 
     # ------------------------------------------------------------------ 后台监听

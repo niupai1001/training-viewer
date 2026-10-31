@@ -4,9 +4,9 @@
 
 - 日志协议：Training Viewer Log Protocol（TVLP）1.0，见 [`schemas/`](schemas/)。
 - 运行方式：本机 `127.0.0.1`，单用户；不监听公网，不需要数据库服务器。
-- 数据边界：原始日志只读；SQLite 只保存可重建的索引、备注和保存的对比视图。
+- 数据边界：原始日志只读；`index.sqlite3` 只保存可重建的指标索引；根目录、备注、收藏、保存视图在 `user_state.sqlite3`，删除索引不会清空。
 
-![总览页面](docs/images/overview.png)
+![训练工作区](docs/images/overview.png)
 
 ## 已有训练日志：直接打开（零改造）
 
@@ -75,9 +75,10 @@ training-viewer attach D:\runs\my-project --json
 
 | 功能 | 页面 | 说明 |
 |---|---|---|
-| 项目 / 实验组 / 运行管理 | 实验管理 | 按项目、实验组、状态、模型、数据集、任务、标签、收藏筛选；列显示/隐藏、排序、批量选择 |
-| 实时曲线 | 监控 / 指标曲线 | 首页直接显示当前/最近训练的 Loss 与验证指标；按真实数据自动选择优化步或训练轮次，不伪造 Step |
-| 多实验对比 | 对比 | 同一指标定义下叠加多个运行；Best/Last；超参数差异；可比较性警告；保存视图可按 ID 完整恢复 |
+| 项目 / 实验组 / 运行管理 | 训练工作区 / 设置与诊断 | 左树按项目/实验组组织；搜索、多选、状态/指标摘要；高级筛选在设置页 |
+| 实时曲线 | 训练工作区 | 左侧选 Run，右侧直接显示当前/最近训练的 Loss 与验证指标；按真实数据自动选择优化步或训练轮次，不伪造 Step |
+| 多实验对比 | 训练工作区 | 左树勾选第二个 Run 即自动叠加共同指标；不跳转独立比较页，不插值；不可排名时显示原因 |
+| 逻辑实验 | 训练工作区 / 设置与诊断 | 默认一文件一 Run；用户确认后可将同目录多文件归并为一个逻辑实验，sidecar 可撤销 |
 | 预测结果对照 | 运行页 / 预测结果 | 运行页内嵌最新预测样本；完整图库按样本和 Epoch 并排显示原图、真实标签、预测 |
 | 配置与来源 | 配置与来源 | run.json 的模型、数据集、超参数、代码来源、指标定义 |
 | 时间线与诊断 | 时间线 / 设置与诊断 | 生命周期、心跳、产物事件；坏行、缺失产物、Step 回退、状态未知原因；活动与生命周期状态分开显示 |
@@ -142,18 +143,18 @@ training-viewer open D:\experiments\projectA D:\experiments\projectB
 
 ## 使用流程
 
-1. **添加日志根目录**：在首页点“打开训练目录”，可粘贴路径或选择本机目录；也可用 CLI / VS Code。目录会记住，`training-viewer open` 不带参数时恢复上次工作区。
-2. **先看曲线**：首页自动选最近/活跃运行，显示损失与验证指标；训练程序持续追加时后台每 2 秒增量读取，watchdog 目录事件触发重新发现。
-3. **筛选实验**：实验库默认只显示名称、状态、关键指标、最近更新；实验组、标签、模型等放在“高级筛选”。
-4. **查看单次运行**：自动选择 Train Loss、Val Loss 和验证主指标；曲线、配置、产物、时间线、诊断五个标签页。
-5. **对比多个实验**：点运行行的“+ 对比”或多选；“加入对比”会带同数据集运行；可保存视图并从名称或 ID 恢复完整设置。
-6. **查看预测结果**：运行页先显示最新预测样本；完整图库从“预测结果”入口进入。
+1. **打开训练目录**：工作区/设置页可粘贴路径或选择本机目录；目录会记住，`training-viewer open` 不带参数时恢复上次工作区。
+2. **先看曲线**：左侧选择运行，右侧自动显示 Loss 与验证指标；首次打开优先恢复上次主动选择的 Run，示例不会抢占真实运行。
+3. **多选对比**：在左树勾选第二个 Run，右侧自动叠加共同指标；缺失/定义冲突会明确提示，不默认排名。
+4. **高级分析**：右上“高级分析”抽屉包含配置、诊断、来源清单；来源映射在“设置与诊断”页，可确认归并或撤销。
+5. **查看结果**：有事件产物时显示最新预测；事件缺失时显示“结果文件候选”，标注未确认。
+6. **实时更新**：训练程序持续追加时后台每 2 秒增量读取；每 300 秒全量兜底，watchdog 目录事件提前触发。
 
-![实验库](docs/images/experiments.png)
+![训练工作区 1440×900](docs/images/workspace-1440x900.png)
 
-![运行详情](docs/images/run-detail.png)
+![训练工作区 1366×768](docs/images/workspace-1366x768.png)
 
-![实验对比](docs/images/compare.png)
+![训练工作区对比](docs/images/compare.png)
 
 ## 命令行
 
@@ -194,7 +195,7 @@ code --install-extension vscode-extension\training-viewer-vscode-1.0.0.vsix
 - `Training Viewer: 打开查看器`：选择日志目录，启动服务并打开浏览器。
 - `Training Viewer: 用当前工作区打开`：把工作区作为日志根目录。
 - `Training Viewer: 添加训练日志目录`：复用已运行实例添加目录。
-- `Training Viewer: 对比勾选的运行`：在侧边栏勾选运行后打开对比页。
+- `Training Viewer: 对比勾选的运行`：在侧边栏勾选运行后打开训练工作区对比。
 
 扩展只调用本机命令行与 `http://127.0.0.1`，退出 VS Code 不会停止训练程序。
 
@@ -283,7 +284,7 @@ npm run build
 
 测试覆盖：完整行/半行/坏行、截断重建、重复导入、断点续训、状态/活动分离、同 Step 多阶段、自动横轴、CSV 映射、TensorBoard 标量、任意 CSV/TSV/JSONL/文本、run_id 冲突、目录移动、增量扫描、降采样与原始 Best/Last、产物路径穿越、Host/Origin 校验、导出、CLI 校验、训练写入器与恢复会话。当前结果：**76 通过，2 跳过**（跳过的是 Windows 环境不允许创建符号链接的用例）。
 
-前端另有两个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 覆盖监控/实验库/运行详情/对比。百万点与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
+前端另有两个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 在 1440×900 与 1366×768 覆盖工作区、多选叠加和设置页。当前结果：**89 通过，2 跳过**。百万点、MLflow 原型与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
 
 ## 已知限制
 
@@ -297,11 +298,16 @@ npm run build
 - 模型文件反序列化、HTML 产物脚本执行。
 - 训练 Agent 需要修改训练代码并生成真实指标（仅新实验增强模式；已有日志可直接导入，不要求改代码）。
 - 普通文本日志只支持规则模板能明确识别的 Step/Epoch + 指标键值；歧义 CSV 还没有持久化人工字段映射界面。
+- 逻辑实验归并只支持同一目录内的文件；跨目录规则会被拒绝。
 - TensorBoard 仍从事件文件开头遍历并跳过已消费序号，不是真正的字节 seek；十万级以上事件文件未验证。
+- TensorBoard image 事件未解析；已有图片通过“结果文件候选”发现，需用户确认，多光谱/GeoTIFF 波段配置未实现。
+- Python 来源插件支持 manifest/状态/失败隔离；前端产物插件仍是编译期内建，不支持动态安装。
+- CUDA `0xC0000005` 未在用户机器复现；writer 已默认无后台心跳线程并提供隔离矩阵脚本，但不能宣称根因已修复。
 - 本版本只在 Windows 实机复验；macOS/Linux 的目录选择框、watchdog 与路径差异未独立验证。
-- 训练环境与查看器环境默认分离：`attach` 在查看器所在机器执行；跨机器场景只完成日志写入，由本机挂载。
+- 没有用户的 62 个真实来源，未生成真实来源清单与 53→62 解释；工具为 `tools/export_source_inventory.py`。
+- 训练环境与查看器环境默认分离：`attach` 在查看器所在机器执行；跨机器场景只完成日志写入，由本机挂载或 SSH 隧道访问。
 
-性能上，曲线查询使用最小-最大分桶降采样（保留极值），Best/Last 始终基于全量原始记录。10 万点以内交互可用；100 万点索引约 33 秒、查询约 9.4 秒，尚未做数据库端预聚合或视窗分页（见 [`docs/performance.md`](docs/performance.md)）。
+性能上，曲线查询在 SQLite 内做最小-最大/首尾分桶，Best/Last 始终基于全量原始记录。10 万点以内交互可用；100 万点索引约 43 秒、首次查询约 3.5 秒、索引库约 1.57 GB，尚未做物化桶或缩放区间查询（见 [`docs/performance.md`](docs/performance.md)）。
 
 ## 文档与术语
 
@@ -316,7 +322,9 @@ npm run build
 - [第三方许可证与依赖](docs/third-party-licenses.md)
 - [VS Code 扩展说明](docs/vscode-extension.md)
 - [开发环境与调试](docs/development.md)
+- [架构决策记录 ADR-001：存储后端](docs/adr/ADR-001-storage-backend.md)
 - [性能基准与限制](docs/performance.md)
+- [审计来源清单工具与证据边界](audit/README.md)
 - 设计规范：[架构与协议 V1.1](Training_Viewer_Architecture_and_Protocol_v1.1.md)、[命名与文档规范](docs/documentation_and_naming_standard.md)
 
 首次出现的技术缩写及中文解释统一登记在[术语表](docs/glossary.md)。界面中的 mIoU、F1、Step、Epoch 等指标均可通过悬停提示或指标定义查看含义与单位。

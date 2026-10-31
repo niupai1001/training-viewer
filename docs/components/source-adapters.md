@@ -69,7 +69,7 @@
 ## 主要处理流程
 
 1. 注册表按固定优先级遍历适配器：TVLP → TensorBoard → CSV → 通用文件。
-2. 第一个返回非 `None` 的适配器胜出；扫描器不再向该目录的产物目录下钻。
+2. 第一个返回非空的适配器胜出；标准/TensorBoard/CSV 匹配后不再下钻，但通用文件父目录会继续下探以发现独立子 Run。
 3. 适配器构造 `LogFileSpec` 列表，把文件路径与对应读取器实例绑定。
 4. 索引器为每个文件读取游标并写入统一表；不需要知道来源格式。
 
@@ -80,6 +80,7 @@
 | 注册顺序 | TVLP、TensorBoard、CSV、通用文件 | 决定同一目录的优先级 |
 | 合成项目名 | 上一级目录名 | 无 run.json 时 |
 | entry point 组 | `training_viewer.source_adapters` | 第三方适配器安装式注册 |
+| 插件 manifest | `name/version/adapter_id/capabilities` | 第三方应提供；缺失时状态 `missing-manifest`，加载失败记录在 `/plugins` |
 
 依赖：标准库；TensorBoard 来源需要可选的 `tensorboard` 包。
 
@@ -89,7 +90,7 @@
 
 1. 有 `run.json` 的目录永不按 TensorBoard/CSV 解释，避免同一目录出现两个运行；
 2. TensorBoard/CSV 的合成元数据在界面显式标记，不假装是作者声明的身份；
-3. 第三方适配器可通过 `SourceAdapterRegistry.register()` 或 Python entry point 接入，核心索引器无需修改。
+3. 第三方适配器可通过 `SourceAdapterRegistry.register()` 或 Python entry point 接入；插件 manifest 与失败状态可查询，单个插件失败不阻止内置来源。
 
 ## 如何验证
 

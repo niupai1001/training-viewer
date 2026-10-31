@@ -29,8 +29,6 @@ from .base import (
     require_string,
 )
 
-MAX_REPORTED_ISSUES_PER_READ = 50
-
 _METRIC_RECORD_FIELDS = {
     "timestamp",
     "event_id",
@@ -224,7 +222,6 @@ class StandardTrainingLogReader:
         source_file = relative_source_path(run_directory, file_path)
         current_offset = start_offset
         current_line_number = next_line_number
-        reported = 0
 
         for raw_line in complete_bytes.splitlines(keepends=True):
             line_offset = current_offset
@@ -233,8 +230,6 @@ class StandardTrainingLogReader:
             current_line_number += 1
             stripped = raw_line.strip()
             if not stripped:
-                continue
-            if reported >= MAX_REPORTED_ISSUES_PER_READ:
                 continue
             try:
                 parsed = load_json_line(stripped)
@@ -248,15 +243,7 @@ class StandardTrainingLogReader:
                         _parse_event_record(payload_object, source_file, line_offset, line_number)
                     )
             except (UnicodeDecodeError, ValueError) as error:
-                reported += 1
                 result.add_issue(str(file_path), line_number, f"第 {line_number} 行无法导入：{error}")
-        if reported >= MAX_REPORTED_ISSUES_PER_READ:
-            result.add_issue(
-                str(file_path),
-                0,
-                f"本文件一次读取超过 {MAX_REPORTED_ISSUES_PER_READ} 条错误，其余错误已省略",
-                "warning",
-            )
 
         result.cursor = FileCursor(
             file_path=str(file_path),
@@ -274,4 +261,5 @@ class StandardTrainingLogReader:
                 "文件末尾存在尚未写完的 JSON 行，本次暂不导入，下次读取会补齐",
                 "warning",
             )
+        result.finalize_issues(str(file_path))
         return result

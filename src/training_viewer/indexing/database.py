@@ -68,10 +68,16 @@ CREATE TABLE IF NOT EXISTS metric_points (
 );
 CREATE INDEX IF NOT EXISTS idx_metric_points_series
     ON metric_points(run_id, phase, metric_name, global_step);
+CREATE INDEX IF NOT EXISTS idx_metric_points_series_cover
+    ON metric_points(run_id, phase, metric_name, global_step, value, epoch, timestamp, session_id);
 CREATE INDEX IF NOT EXISTS idx_metric_points_epoch
     ON metric_points(run_id, phase, metric_name, epoch);
+CREATE INDEX IF NOT EXISTS idx_metric_points_epoch_cover
+    ON metric_points(run_id, phase, metric_name, epoch, value, global_step, timestamp, session_id);
 CREATE INDEX IF NOT EXISTS idx_metric_points_time
     ON metric_points(run_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_metric_points_time_cover
+    ON metric_points(run_id, phase, metric_name, timestamp, value, global_step, epoch, session_id);
 CREATE INDEX IF NOT EXISTS idx_metric_points_run_id ON metric_points(run_id, id);
 
 CREATE TABLE IF NOT EXISTS artifacts (
@@ -170,10 +176,11 @@ CREATE TABLE IF NOT EXISTS run_conflicts (
 
 
 class IndexDatabase:
-    """索引数据库连接与事务边界。"""
+    """索引数据库连接与事务边界；用户状态通过 ATTACH 以 user_state 别名访问。"""
 
-    def __init__(self, database_file: Path):
+    def __init__(self, database_file: Path, user_state_file: Path | None = None):
         self.database_file = database_file
+        self.user_state_file = user_state_file
         self._write_lock = threading.RLock()
 
     def initialize(self) -> None:
@@ -249,6 +256,9 @@ class IndexDatabase:
         connection = sqlite3.connect(self.database_file, timeout=30, isolation_level=None)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute("PRAGMA temp_store=MEMORY")
+        if self.user_state_file is not None and self.user_state_file.is_file():
+            connection.execute("ATTACH DATABASE ? AS user_state", (str(self.user_state_file),))
         try:
             yield connection
         finally:

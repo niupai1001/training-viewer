@@ -53,6 +53,10 @@ class IndexQueries:
     def __init__(self, database: IndexDatabase, now=None):
         self.database = database
         self._now = now or (lambda: datetime.now(timezone.utc))
+        self._series_cache: dict[tuple, dict] = {}
+
+    def invalidate_series_cache(self) -> None:
+        self._series_cache.clear()
 
     # ------------------------------------------------------------------ 运行目录树
     def projects(self) -> dict:
@@ -67,7 +71,7 @@ class IndexQueries:
                 """
             ).fetchall()
             roots = connection.execute(
-                "SELECT id, path, added_at FROM watched_roots ORDER BY id ASC"
+                "SELECT id, path, added_at FROM user_state.watched_roots ORDER BY id ASC"
             ).fetchall()
         projects: dict[str, dict] = {}
         for row in rows:
@@ -150,7 +154,7 @@ class IndexQueries:
             total = connection.execute(
                 f"""
                 SELECT COUNT(*) FROM runs r
-                LEFT JOIN run_annotations a ON a.run_id = r.run_id
+                LEFT JOIN user_state.run_annotations a ON a.run_id = r.run_id
                 {where_clause}
                 """,
                 parameters,
@@ -161,7 +165,7 @@ class IndexQueries:
                        COALESCE(a.favorite, 0) AS favorite,
                        c.conflicting_run_dir AS conflicting_run_dir
                 FROM runs r
-                LEFT JOIN run_annotations a ON a.run_id = r.run_id
+                LEFT JOIN user_state.run_annotations a ON a.run_id = r.run_id
                 LEFT JOIN run_conflicts c ON c.run_id = r.run_id
                 {where_clause}
                 ORDER BY {order_clause}
@@ -388,7 +392,7 @@ class IndexQueries:
                 SELECT r.*, COALESCE(a.note, '') AS note, COALESCE(a.favorite, 0) AS favorite,
                        c.conflicting_run_dir AS conflicting_run_dir
                 FROM runs r
-                LEFT JOIN run_annotations a ON a.run_id = r.run_id
+                LEFT JOIN user_state.run_annotations a ON a.run_id = r.run_id
                 LEFT JOIN run_conflicts c ON c.run_id = r.run_id
                 WHERE r.run_id = ?
                 """,
@@ -794,22 +798,17 @@ class IndexQueries:
         self, connection, run_id: str, metric: dict, axis: str, max_points: int
     ) -> dict:
         phase, metric_name = metric["phase"], metric["metric_name"]
-        axis_conditions = {
-            "global_step": "global_step IS NOT NULL",
-            "epoch": "epoch IS NOT NULL",
-            "timestamp": "timestamp IS NOT NULL",
-        }[axis]
-        rows = connection.execute(
-            f"""
-            SELECT value, global_step, epoch, timestamp, session_id
-            FROM metric_points
-            WHERE run_id = ? AND phase = ? AND metric_name = ? AND {axis_conditions}
-            ORDER BY {axis}, timestamp, id
-            """,
-            (run_id, phase, metric_name),
-        ).fetchall()
+        cache_key = (run_id, phase, metric_name, axis, max_points)
+        cached = self._series_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        rows, total_points, downsampled = self._query_series_points(
+            connection, run_id, phase, metric_name, axis, max_points
+        )
         points = [self._point_payload(row, axis) for row in rows]
-        sampled = self._downsample(points, max_points)
+        if len(points) > max_points:
+            points = self._downsample(points, max_points)
+            downsampled = True
         warnings: list[dict] = []
         if not points:
             warnings.append(
@@ -833,7 +832,7 @@ class IndexQueries:
                     ),
                 }
             )
-        return {
+        payload = {
             "key": metric["key"],
             "phase": phase,
             "metric_name": metric_name,
@@ -843,19 +842,90 @@ class IndexQueries:
             "definition": metric["definition"],
             "definition_key": metric["definition_key"],
             "axis": axis,
-            "points": sampled,
-            "total_points": len(points),
-            "returned_points": len(sampled),
-            "downsampled": len(sampled) < len(points),
+            "points": points,
+            "total_points": total_points,
+            "returned_points": len(points),
+            "downsampled": downsampled,
             "best": metric["best"],
             "last": metric["last"],
             "warnings": warnings,
         }
+        self._series_cache[cache_key] = payload
+        if len(self._series_cache) > 512:
+            self._series_cache.pop(next(iter(self._series_cache)))
+        return payload
+
+    def _query_series_points(
+        self, connection, run_id: str, phase: str, metric_name: str, axis: str, max_points: int
+    ) -> tuple[list, int, bool]:
+        """优先在 SQL 层做 min/max/首/尾分桶，避免把百万点搬进 Python。"""
+        axis_conditions = {
+            "global_step": "global_step IS NOT NULL",
+            "epoch": "epoch IS NOT NULL",
+            "timestamp": "timestamp IS NOT NULL",
+        }[axis]
+        total = connection.execute(
+            f"""
+            SELECT COUNT(*) FROM metric_points
+            WHERE run_id = ? AND phase = ? AND metric_name = ? AND {axis_conditions}
+            """,
+            (run_id, phase, metric_name),
+        ).fetchone()[0]
+        if total <= max_points:
+            rows = connection.execute(
+                f"""
+                SELECT value, global_step, epoch, timestamp, session_id, {axis} AS x
+                FROM metric_points
+                WHERE run_id = ? AND phase = ? AND metric_name = ? AND {axis_conditions}
+                ORDER BY {axis}, timestamp, id
+                """,
+                (run_id, phase, metric_name),
+            ).fetchall()
+            return list(rows), total, False
+        bucket_count = max(1, max_points // 4)
+        rows = connection.execute(
+            f"""
+            WITH filtered AS (
+                SELECT id, value, global_step, epoch, timestamp, session_id, {axis} AS x
+                FROM metric_points
+                WHERE run_id = ? AND phase = ? AND metric_name = ? AND {axis_conditions}
+            ),
+            bounds AS (
+                SELECT MIN(x) AS min_x, MAX(x) AS max_x FROM filtered
+            ),
+            scored AS (
+                SELECT filtered.*,
+                       CAST((x - bounds.min_x) * ? / NULLIF(bounds.max_x - bounds.min_x, 0) AS INTEGER) AS bucket
+                FROM filtered CROSS JOIN bounds
+            ),
+            aggregates AS (
+                SELECT bucket,
+                       MIN(value) AS min_value,
+                       MAX(value) AS max_value,
+                       MIN(x) AS first_x,
+                       MAX(x) AS last_x
+                FROM scored
+                GROUP BY bucket
+            )
+            SELECT DISTINCT scored.value, scored.global_step, scored.epoch,
+                   scored.timestamp, scored.session_id, scored.x
+            FROM scored JOIN aggregates ON scored.bucket = aggregates.bucket
+            WHERE scored.value = aggregates.min_value
+               OR scored.value = aggregates.max_value
+               OR scored.x = aggregates.first_x
+               OR scored.x = aggregates.last_x
+            ORDER BY scored.x, scored.value
+            """,
+            (run_id, phase, metric_name, bucket_count),
+        ).fetchall()
+        return list(rows), total, len(rows) < total
 
     @staticmethod
     def _point_payload(row, axis: str) -> dict:
         if axis == "timestamp":
             x = epoch_seconds_from_iso(row["timestamp"]) if row["timestamp"] else None
+        elif "x" in row.keys():
+            x = row["x"]
         elif axis == "epoch":
             x = row["epoch"]
         else:
@@ -1427,7 +1497,7 @@ class IndexQueries:
     def get_annotation(self, run_id: str) -> dict:
         with self.database.connection() as connection:
             row = connection.execute(
-                "SELECT note, favorite, updated_at FROM run_annotations WHERE run_id = ?",
+                "SELECT note, favorite, updated_at FROM user_state.run_annotations WHERE run_id = ?",
                 (run_id,),
             ).fetchone()
         return (
@@ -1443,7 +1513,7 @@ class IndexQueries:
         with self.database.transaction() as connection:
             connection.execute(
                 """
-                INSERT INTO run_annotations (run_id, note, favorite, updated_at)
+                INSERT INTO user_state.run_annotations (run_id, note, favorite, updated_at)
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT(run_id) DO UPDATE SET
                     note = excluded.note,
@@ -1454,10 +1524,71 @@ class IndexQueries:
             )
         return {"note": new_note, "favorite": bool(new_favorite)}
 
+    def source_inventory(self) -> list[dict]:
+        """来源清单：每个原始文件一行，说明它归入哪个逻辑 Run。"""
+        with self.database.connection() as connection:
+            runs = connection.execute(
+                """
+                SELECT run_id, name, project, run_dir, source_kind, metadata_json
+                FROM runs ORDER BY project, name, run_id
+                """
+            ).fetchall()
+            rows = []
+            for run in runs:
+                metadata = json.loads(run["metadata_json"])
+                extensions = metadata.get("extensions") or {}
+                point_count = connection.execute(
+                    "SELECT COUNT(*) FROM metric_points WHERE run_id = ?", (run["run_id"],)
+                ).fetchone()[0]
+                cursors = connection.execute(
+                    "SELECT file_path, file_kind, offset, size, mtime FROM ingestion_cursors WHERE run_id = ? ORDER BY file_path",
+                    (run["run_id"],),
+                ).fetchall()
+                merged = extensions.get("merged_source_run_ids") or []
+                confidence = (
+                    extensions.get("merge_confidence")
+                    or extensions.get("confidence")
+                    or ("canonical" if run["source_kind"] == "tvlp" else "synthetic")
+                )
+                if not cursors:
+                    rows.append(
+                        {
+                            "source_path": None,
+                            "parser": run["source_kind"],
+                            "run_id": run["run_id"],
+                            "raw_run_identifier": extensions.get("source_run_id", run["run_id"]),
+                            "logical_run_id": run["run_id"],
+                            "merged": bool(merged),
+                            "confidence": confidence,
+                            "project": run["project"],
+                            "name": run["name"],
+                            "point_count": point_count,
+                        }
+                    )
+                    continue
+                for cursor in cursors:
+                    rows.append(
+                        {
+                            "source_path": cursor["file_path"],
+                            "parser": cursor["file_kind"],
+                            "run_id": run["run_id"],
+                            "raw_run_identifier": extensions.get("source_run_id", run["run_id"]),
+                            "logical_run_id": run["run_id"],
+                            "merged": bool(merged),
+                            "confidence": confidence,
+                            "project": run["project"],
+                            "name": run["name"],
+                            "point_count": point_count,
+                            "bytes_read": cursor["offset"],
+                            "file_size": cursor["size"],
+                        }
+                    )
+        return rows
+
     def list_saved_views(self) -> list[dict]:
         with self.database.connection() as connection:
             rows = connection.execute(
-                "SELECT id, name, view_kind, payload_json, created_at FROM saved_views ORDER BY id DESC"
+                "SELECT id, name, view_kind, payload_json, created_at FROM user_state.saved_views ORDER BY id DESC"
             ).fetchall()
         return [
             {
@@ -1473,7 +1604,7 @@ class IndexQueries:
     def get_saved_view(self, view_id: int) -> dict | None:
         with self.database.connection() as connection:
             row = connection.execute(
-                "SELECT id, name, view_kind, payload_json, created_at FROM saved_views WHERE id = ?",
+                "SELECT id, name, view_kind, payload_json, created_at FROM user_state.saved_views WHERE id = ?",
                 (view_id,),
             ).fetchone()
         if row is None:
@@ -1489,7 +1620,7 @@ class IndexQueries:
     def create_saved_view(self, name: str, view_kind: str, payload: dict) -> dict:
         with self.database.transaction() as connection:
             cursor = connection.execute(
-                "INSERT INTO saved_views (name, view_kind, payload_json, created_at) VALUES (?, ?, ?, ?)",
+                "INSERT INTO user_state.saved_views (name, view_kind, payload_json, created_at) VALUES (?, ?, ?, ?)",
                 (
                     name,
                     view_kind,
@@ -1508,7 +1639,7 @@ class IndexQueries:
 
     def delete_saved_view(self, view_id: int) -> bool:
         with self.database.transaction() as connection:
-            cursor = connection.execute("DELETE FROM saved_views WHERE id = ?", (view_id,))
+            cursor = connection.execute("DELETE FROM user_state.saved_views WHERE id = ?", (view_id,))
             return cursor.rowcount > 0
 
 

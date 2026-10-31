@@ -13,6 +13,7 @@
 | watchdog | `>=4.0` | Apache-2.0 | 文件事件提前唤醒 | pip |
 | jsonschema | `>=4.20` | MIT | TVLP Schema 校验 | pip |
 | TensorBoard | `>=2.15`（可选 extra） | Apache-2.0 | 事件文件标量读取 | pip，可选 |
+| MLflow（spike） | 3.17.2，仅 `tools/mlflow_spike.py` | Apache-2.0 | ADR 对照原型；不进入运行时依赖 | pip，可选/隔离 |
 | React | `^19.3.1` | MIT | 前端界面 | npm，构建时打包 |
 | Apache ECharts | `^6.1.0` | Apache-2.0 | 曲线与导出 | npm，构建时打包进 `web/` |
 | Vite | `^7.3.7` | MIT | 前端构建 | npm，开发依赖 |

@@ -10,12 +10,14 @@ import type {
   MetricQueryResult,
   MetricKey,
   ProjectTree,
+  ResultCandidate,
   RootDirectory,
   RunDetail,
   RunListQuery,
   RunListResponse,
   SavedView,
   SmoothingMethod,
+  SourceInventoryRow,
   TablePreview,
   TimelineResult,
 } from "../types";
@@ -143,6 +145,36 @@ export const api = {
   tablePreview: (artifactId: number) =>
     request<TablePreview>(`/artifacts/${artifactId}/table-preview`),
   diagnostics: () => request<Diagnostics>("/diagnostics"),
+  sourceInventory: () =>
+    request<{ sources: SourceInventoryRow[] }>("/audit/sources"),
+  logicalOverrides: () =>
+    request<{
+      overrides: {
+        logical_run_id: string;
+        name: string;
+        files: string[];
+        reason: string;
+        created_at: string;
+      }[];
+    }>("/logical-runs/overrides"),
+  saveLogicalOverride: (payload: {
+    logical_run_id: string;
+    name: string;
+    files: string[];
+    reason: string;
+  }) =>
+    request("/logical-runs/overrides", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteLogicalOverride: (logicalRunId: string) =>
+    request(`/logical-runs/overrides/${encodeURIComponent(logicalRunId)}`, {
+      method: "DELETE",
+    }),
+  resultCandidates: (runId: string) =>
+    request<{ run_id: string; candidates: ResultCandidate[]; note: string }>(
+      `/runs/${encodeURIComponent(runId)}/result-candidates`,
+    ),
   roots: () => request<{ roots: RootDirectory[] }>("/roots"),
   selectRootDirectory: () => request<{ path: string }>("/roots/select", { method: "POST" }),
   addRoot: (path: string) =>

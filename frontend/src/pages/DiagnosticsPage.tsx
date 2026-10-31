@@ -5,6 +5,7 @@ import { useLiveVersion } from "../live/LiveUpdates";
 import type { Severity } from "../types";
 import { formatNumber, statusLabel } from "../utils/format";
 import { RootDirectoriesPanel } from "../components/RootDirectoriesPanel";
+import { LogicalRunMappingPanel } from "../components/LogicalRunMappingPanel";
 import {
   EmptyState,
   ErrorBlock,
@@ -64,6 +65,8 @@ export function DiagnosticsPage() {
       <Panel title="日志目录与来源">
         <RootDirectoriesPanel />
       </Panel>
+
+      <LogicalRunMappingPanel />
 
       {message ? <p className="notice">{message}</p> : null}
       {diagnostics.error ? (

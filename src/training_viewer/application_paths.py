@@ -50,6 +50,7 @@ class ApplicationPaths:
 
     data_dir: Path
     database_file: Path
+    user_state_file: Path
     instance_file: Path
     web_dir: Path
     schema_dir: Path
@@ -67,6 +68,7 @@ class ApplicationPaths:
         return cls(
             data_dir=resolved_data_dir,
             database_file=resolved_data_dir / "index.sqlite3",
+            user_state_file=resolved_data_dir / "user_state.sqlite3",
             instance_file=resolved_data_dir / "instance.json",
             web_dir=package_dir / "web",
             schema_dir=package_dir / "schemas",

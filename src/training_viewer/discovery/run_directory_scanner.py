@@ -99,7 +99,13 @@ class RunDirectoryScanner:
                 continue
             if discovered_runs:
                 result.runs.extend(discovered_runs)
-                continue
+                continues_into_children = all(
+                    run.metadata_synthetic
+                    and (run.source_kind.startswith("generic-") or run.source_kind == "plain-text")
+                    for run in discovered_runs
+                )
+                if not continues_into_children:
+                    continue
             if depth >= self.max_depth:
                 result.issues.append(
                     ScanIssue(

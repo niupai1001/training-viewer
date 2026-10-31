@@ -20,8 +20,6 @@ from .base import (
     timestamp_from_epoch_seconds,
 )
 
-MAX_REPORTED_ISSUES_PER_READ = 50
-
 _STEP_ALIASES = ("global_step", "step", "iteration", "iter", "iters")
 _EPOCH_ALIASES = ("epoch", "epochs")
 _TIMESTAMP_ALIASES = ("timestamp", "time", "wall_time", "date", "datetime")
@@ -240,7 +238,6 @@ class CsvMetricLogReader:
             )
 
         row_index = 0
-        reported = 0
         try:
             with file_path.open("r", encoding="utf-8-sig", newline="") as handle:
                 reader = csv.reader(handle, delimiter=self.delimiter)
@@ -251,8 +248,6 @@ class CsvMetricLogReader:
                     if current_row < start_row:
                         continue
                     if not any(cell.strip() for cell in row):
-                        continue
-                    if reported >= MAX_REPORTED_ISSUES_PER_READ:
                         continue
                     line_number = current_row + 2
                     try:
@@ -313,17 +308,12 @@ class CsvMetricLogReader:
                                 )
                             )
                     except (ValueError, IndexError) as error:
-                        reported += 1
                         result.add_issue(
                             str(file_path), line_number, f"第 {line_number} 行无法导入：{error}"
                         )
         except UnicodeDecodeError as error:
             result.add_issue(str(file_path), row_index + 2, f"CSV 不是有效的 UTF-8：{error}")
 
-        if reported >= MAX_REPORTED_ISSUES_PER_READ:
-            result.add_issue(
-                str(file_path), 0, "本文件一次读取错误过多，其余错误已省略", "warning"
-            )
         result.cursor = FileCursor(
             file_path=str(file_path),
             file_kind=self.file_kind,
@@ -333,6 +323,7 @@ class CsvMetricLogReader:
             size=file_stat.st_size,
             mtime=file_stat.st_mtime,
         )
+        result.finalize_issues(str(file_path))
         return result
 
     @staticmethod

@@ -49,7 +49,7 @@
 
 | 配置项 | 默认值 | 作用 |
 |---|---|---|
-| `MAX_REPORTED_ISSUES_PER_READ` | 50 | 单次读取最多报告的错误数，防止损坏文件刷爆诊断 |
+| `MAX_REPORTED_ISSUES_PER_READ` | 50 | 单次读取最多保留的错误详情；超过后只追加“还有 N 条”摘要，**不跳过后续合法行** |
 
 依赖：Python 标准库 `json`、`pathlib`、`datetime`；项目内 `security.path_guard` 用于产物路径白名单。没有第三方运行时依赖。
 

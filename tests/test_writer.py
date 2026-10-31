@@ -93,6 +93,24 @@ def test_writer_normalizes_missing_metric_direction(tmp_path: Path) -> None:
         )
 
 
+def test_writer_default_has_no_background_heartbeat_thread(tmp_path: Path) -> None:
+    writer = TrainingRunWriter(
+        log_root=tmp_path / "logs",
+        project="demo",
+        name="sync-heartbeat",
+        metric_definitions={"train/loss": {"direction": "min", "unit": "none"}},
+    )
+    writer.start()
+    try:
+        assert writer._heartbeat_thread is None
+        writer.log_metrics("train", {"loss": 0.5}, global_step=1, epoch=1)
+        writer.log_heartbeat(global_step=1)
+    finally:
+        writer.finish()
+    event_lines = (writer.run_directory / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    assert any(json.loads(line)["type"] == "heartbeat" for line in event_lines)
+
+
 def test_writer_resume_creates_new_session_and_keeps_metrics(tmp_path: Path) -> None:
     run_directory = tmp_path / "experiments" / "resume-run"
     first = TrainingRunWriter(

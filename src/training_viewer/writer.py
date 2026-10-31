@@ -93,7 +93,7 @@ class TrainingRunWriter:
         tags: list[str] | None = None,
         metric_definitions: dict | None = None,
         session_id: str | None = None,
-        heartbeat_interval_seconds: float | None = 30.0,
+        heartbeat_interval_seconds: float | None = 0.0,
         resume: bool = False,
     ):
         if not project or not str(project).strip():
@@ -151,7 +151,11 @@ class TrainingRunWriter:
         return False
 
     def start(self) -> "TrainingRunWriter":
-        """创建/恢复运行目录、写元数据、打开日志并写 started/resumed。"""
+        """创建/恢复运行目录、写元数据、打开日志并写 started/resumed。
+
+        默认不创建后台心跳线程；需要异步心跳时显式传入
+        heartbeat_interval_seconds > 0。训练主线程可随时调用 log_heartbeat()。
+        """
         with self._lock:
             if self._started:
                 return self

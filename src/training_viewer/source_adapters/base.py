@@ -8,7 +8,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
-
 from ..log_readers.base import FileCursor, ReadResult
 
 
@@ -56,11 +55,34 @@ class SourceAdapterRegistry:
 
     def __init__(self) -> None:
         self._adapters: list[SourceAdapter] = []
+        self.plugin_records: list[dict] = []
 
-    def register(self, adapter: SourceAdapter) -> None:
+    def register(
+        self, adapter: SourceAdapter, manifest: dict | None = None, builtin: bool = False
+    ) -> None:
         if any(existing.adapter_id == adapter.adapter_id for existing in self._adapters):
             raise ValueError(f"日志来源适配器已注册：{adapter.adapter_id}")
         self._adapters.append(adapter)
+        self.plugin_records.append(
+            {
+                "adapter_id": adapter.adapter_id,
+                "display_name": getattr(adapter, "display_name", adapter.adapter_id),
+                "manifest": manifest or {},
+                "status": "builtin" if builtin else ("loaded" if manifest else "missing-manifest"),
+                "error": None,
+            }
+        )
+
+    def record_plugin_failure(self, name: str, error: str) -> None:
+        self.plugin_records.append(
+            {
+                "adapter_id": name,
+                "display_name": name,
+                "manifest": {},
+                "status": "failed",
+                "error": error,
+            }
+        )
 
     def adapters(self) -> list[SourceAdapter]:
         return list(self._adapters)
