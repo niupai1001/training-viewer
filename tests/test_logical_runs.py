@@ -1,6 +1,7 @@
 """逻辑实验归并、侧车覆盖与扫描不遗漏子目录 Run。"""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from conftest import make_run_directory, metric_record
@@ -69,3 +70,20 @@ def test_scanner_continues_into_children_after_generic_parent_run(tmp_path: Path
     run_ids = {run["run_id"] for run in service.queries.list_runs()["runs"]}
     assert "child-tvlp" in run_ids
     assert any(run_id.startswith("text-") for run_id in run_ids)
+
+
+def test_explicit_jsonl_run_id_is_inventoried_without_silent_merge(tmp_path: Path) -> None:
+    paths = ApplicationPaths.resolve(tmp_path / "data")
+    service = TrainingViewerService(paths)
+    root = tmp_path / "logs"
+    root.mkdir()
+    for name in ("train.jsonl", "val.jsonl"):
+        (root / name).write_text(
+            json.dumps({"run_id": "experiment-42", "step": 1, "loss": 0.5}) + "\n",
+            encoding="utf-8",
+        )
+    service.add_root(str(root))
+    assert service.queries.list_runs()["total"] == 2
+    inventory = service.queries.source_inventory()
+    assert {row["raw_run_identifier"] for row in inventory} == {"experiment-42"}
+    assert all(not row["merged"] for row in inventory)

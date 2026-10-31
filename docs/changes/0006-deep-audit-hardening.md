@@ -32,7 +32,7 @@
 
 - 新增 `LogicalRunOverrideStore`：sidecar `logical_runs.json` 存在 Viewer 数据目录；默认不按目录自动合并；用户确认后把同目录多文件归并为一个逻辑 Run，可撤销；原始日志不改。
 - 扫描器在通用文件父目录匹配后继续下探子目录，避免漏掉独立子 Run。
-- 新增 `GET /audit/sources` 与 `tools/export_source_inventory.py`：逐文件列出 parser、原始 ID、逻辑 Run、归并、置信度、点数。
+- 新增 `GET /audit/sources` 与 `tools/export_source_inventory.py`：逐文件列出 parser、原始 ID、逻辑 Run、归并、置信度、点数。通用日志会提取文件内明确写出的 `run_id`/`session_id`，只用于审计与归并建议，不静默合并。
 - 新增 `user_state.sqlite3`：根目录、备注、收藏、保存视图独立保存；旧 `index.sqlite3` 启动时迁移；删除索引不会清空用户状态。
 - `IndexDatabase` 通过 `ATTACH ... AS user_state` 查询；根目录查询迁移到独立库。
 
@@ -78,10 +78,10 @@
 
 ## 5. 验证结果
 
-- `pytest -q`：**90 passed，2 skipped**（Windows 符号链接限制）。
+- `pytest -q`：**91 passed，2 skipped**（Windows 符号链接限制）。
 - `ruff check src tests tools --select F,E9`：通过。
 - `npm run typecheck`：通过。
-- `npm run test`：MetricChart 生命周期测试（2）通过。
+- `npm run test`：MetricChart 生命周期/缩放回调测试（3）通过。
 - `npm run build`：通过。
 - `npm run e2e`：真实 Chrome 1440×900、1366×768 工作区/多选/诊断，无 console error。
 - 新增 `.github/workflows/ci.yml` 的 Ubuntu/Windows/macOS × Python 3.11/3.13 矩阵；本次未实际运行该远端 CI。

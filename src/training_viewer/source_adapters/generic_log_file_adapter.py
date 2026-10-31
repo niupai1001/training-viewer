@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -91,6 +92,57 @@ def _synthetic_metadata(
     }
 
 
+_IDENTITY_KEYS = ("run_id", "session_id", "run", "session", "training_id")
+_IDENTITY_RE = re.compile(
+    r"\b(?:run_id|session_id|training_id|run|session)\s*[=:]\s*([A-Za-z0-9_.:-]{1,160})",
+    re.IGNORECASE,
+)
+
+
+def _explicit_source_run_id(path: Path, suffix: str) -> str | None:
+    """只提取文件明确写出的运行/会话标识；不按文件名猜测身份。"""
+    try:
+        if suffix in (".csv", ".tsv"):
+            delimiter = "\t" if suffix == ".tsv" else ","
+            with path.open("r", encoding="utf-8-sig", newline="") as handle:
+                reader = csv.reader(handle, delimiter=delimiter)
+                headers = next(reader, None)
+                row = next(reader, None)
+            if not headers or not row:
+                return None
+            normalized = [header.strip().lower() for header in headers]
+            for key in _IDENTITY_KEYS:
+                if key in normalized:
+                    index = normalized.index(key)
+                    value = row[index].strip() if index < len(row) else ""
+                    return value or None
+        elif suffix == ".jsonl":
+            with path.open("r", encoding="utf-8", errors="strict") as handle:
+                for index, line in enumerate(handle):
+                    if index >= 20:
+                        break
+                    if not line.strip():
+                        continue
+                    payload = json.loads(line)
+                    if not isinstance(payload, dict):
+                        continue
+                    for key in _IDENTITY_KEYS:
+                        value = payload.get(key)
+                        if isinstance(value, str) and value.strip():
+                            return value.strip()[:160]
+        else:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                for index, line in enumerate(handle):
+                    if index >= 80:
+                        break
+                    match = _IDENTITY_RE.search(line)
+                    if match:
+                        return match.group(1)
+    except (OSError, ValueError, csv.Error, UnicodeError):
+        return None
+    return None
+
+
 class GenericLogFileSourceAdapter:
     """无 run.json 的通用日志文件来源。"""
 
@@ -143,6 +195,10 @@ class GenericLogFileSourceAdapter:
         else:
             return None
         metadata = _synthetic_metadata(self.adapter_id, path, source_kind, confidence)
+        source_run_id = _explicit_source_run_id(path, suffix)
+        if source_run_id:
+            metadata.setdefault("extensions", {})["source_run_id"] = source_run_id
+            metadata["extensions"]["source_run_identifier"] = "explicit"
         return DiscoveredRun(
             source_kind=source_kind,
             adapter_id=self.adapter_id,

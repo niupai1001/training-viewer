@@ -284,7 +284,7 @@ npm run build
 
 测试覆盖：完整行/半行/坏行、截断重建、重复导入、断点续训、状态/活动分离、同 Step 多阶段、自动横轴、CSV 映射、TensorBoard 标量、任意 CSV/TSV/JSONL/文本、run_id 冲突、目录移动、增量扫描、降采样与原始 Best/Last、产物路径穿越、Host/Origin 校验、导出、CLI 校验、训练写入器与恢复会话。当前结果：**76 通过，2 跳过**（跳过的是 Windows 环境不允许创建符号链接的用例）。
 
-前端另有两个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 在 1440×900 与 1366×768 覆盖工作区、多选叠加和设置页。当前结果：**90 通过，2 跳过**。百万点、MLflow 原型与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
+前端另有 3 个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 在 1440×900 与 1366×768 覆盖工作区、多选叠加、缩放区间和设置页。当前结果：**91 通过，2 跳过**。百万点、MLflow 原型与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
 
 ## 已知限制
 
