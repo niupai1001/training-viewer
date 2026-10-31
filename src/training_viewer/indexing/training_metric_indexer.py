@@ -22,6 +22,7 @@ from ..log_readers.base import (
     LifecycleRecord,
     MetricPoint,
     ParseIssue,
+    epoch_seconds_from_iso,
     file_identity,
     format_timestamp,
     relative_source_path,
@@ -404,6 +405,7 @@ class TrainingMetricIndexer:
 
     def _delete_run_data(self, connection: sqlite3.Connection, run_id: str) -> None:
         connection.execute("DELETE FROM metric_points WHERE run_id = ?", (run_id,))
+        connection.execute("DELETE FROM metric_rollups WHERE run_id = ?", (run_id,))
         connection.execute("DELETE FROM artifacts WHERE run_id = ?", (run_id,))
         connection.execute("DELETE FROM training_events WHERE run_id = ?", (run_id,))
         connection.execute("DELETE FROM ingestion_cursors WHERE run_id = ?", (run_id,))
@@ -419,6 +421,7 @@ class TrainingMetricIndexer:
             "DELETE FROM metric_points WHERE run_id = ? AND source_file = ?",
             (run_id, relative_file),
         )
+        connection.execute("DELETE FROM metric_rollups WHERE run_id = ?", (run_id,))
         connection.execute(
             "DELETE FROM artifacts WHERE run_id = ? AND source_file = ?",
             (run_id, relative_file),
@@ -491,6 +494,7 @@ class TrainingMetricIndexer:
         records: list,
     ) -> bool:
         inserted = False
+        inserted_points: list[MetricPoint] = []
         for record in records:
             if isinstance(record, MetricPoint):
                 cursor = connection.execute(
@@ -516,6 +520,8 @@ class TrainingMetricIndexer:
                     ),
                 )
                 inserted = inserted or cursor.rowcount > 0
+                if cursor.rowcount > 0:
+                    inserted_points.append(record)
             elif isinstance(record, ArtifactRecord):
                 try:
                     resolved = resolve_artifact_path(run_directory, record.path)
@@ -604,7 +610,122 @@ class TrainingMetricIndexer:
                     ),
                 )
                 inserted = inserted or cursor.rowcount > 0
+        self._update_rollups(connection, run_id, inserted_points)
         return inserted
+
+    def _update_rollups(
+        self, connection: sqlite3.Connection, run_id: str, points: list[MetricPoint]
+    ) -> None:
+        if not points:
+            return
+        states: dict[tuple[str, str, str, int], dict] = {}
+        for point in points:
+            for axis, x, width in (
+                ("global_step", point.global_step, 100),
+                ("epoch", point.epoch, 1),
+                ("timestamp", None, 60),
+            ):
+                if axis == "timestamp":
+                    if not point.timestamp:
+                        continue
+                    try:
+                        x = int(epoch_seconds_from_iso(point.timestamp))
+                    except ValueError:
+                        continue
+                if x is None:
+                    continue
+                bucket = int(x) // width
+                key = (axis, point.phase, point.metric_name, bucket)
+                representative = {
+                    "x": int(x) if axis != "timestamp" else int(x),
+                    "value": point.value,
+                    "global_step": point.global_step,
+                    "epoch": point.epoch,
+                    "timestamp": point.timestamp,
+                    "session_id": point.session_id,
+                }
+                state = states.get(key)
+                if state is None:
+                    state = {
+                        "count": 0,
+                        "first": representative,
+                        "min": representative,
+                        "max": representative,
+                        "last": representative,
+                    }
+                    states[key] = state
+                self._merge_rollup_state(state, representative)
+        for (axis, phase, metric_name, bucket), state in states.items():
+            row = connection.execute(
+                """
+                SELECT point_count, first_json, min_json, max_json, last_json
+                FROM metric_rollups
+                WHERE run_id = ? AND phase = ? AND metric_name = ? AND axis = ? AND bucket = ?
+                """,
+                (run_id, phase, metric_name, axis, bucket),
+            ).fetchone()
+            if row is not None:
+                existing = {
+                    "count": row["point_count"],
+                    "first": json.loads(row["first_json"]),
+                    "min": json.loads(row["min_json"]),
+                    "max": json.loads(row["max_json"]),
+                    "last": json.loads(row["last_json"]),
+                }
+                state = self._merge_rollup_states(existing, state)
+            connection.execute(
+                """
+                INSERT INTO metric_rollups
+                    (run_id, phase, metric_name, axis, bucket, point_count,
+                     first_json, min_json, max_json, last_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id, phase, metric_name, axis, bucket) DO UPDATE SET
+                    point_count = excluded.point_count,
+                    first_json = excluded.first_json,
+                    min_json = excluded.min_json,
+                    max_json = excluded.max_json,
+                    last_json = excluded.last_json
+                """,
+                (
+                    run_id,
+                    phase,
+                    metric_name,
+                    axis,
+                    bucket,
+                    state["count"],
+                    json.dumps(state["first"], ensure_ascii=False),
+                    json.dumps(state["min"], ensure_ascii=False),
+                    json.dumps(state["max"], ensure_ascii=False),
+                    json.dumps(state["last"], ensure_ascii=False),
+                ),
+            )
+
+    @staticmethod
+    def _merge_rollup_state(state: dict, point: dict) -> None:
+        state["count"] += 1
+        if point["x"] < state["first"]["x"]:
+            state["first"] = point
+        if point["x"] > state["last"]["x"]:
+            state["last"] = point
+        if point["value"] < state["min"]["value"]:
+            state["min"] = point
+        if point["value"] > state["max"]["value"]:
+            state["max"] = point
+
+    @classmethod
+    def _merge_rollup_states(cls, existing: dict, incoming: dict) -> dict:
+        merged = {
+            "count": existing["count"] + incoming["count"],
+            "first": existing["first"],
+            "min": existing["min"],
+            "max": existing["max"],
+            "last": existing["last"],
+        }
+        for point in (incoming["first"], incoming["min"], incoming["max"], incoming["last"]):
+            cls._merge_rollup_state(merged, point)
+        # count above was already aggregated; undo the four representative increments.
+        merged["count"] -= 4
+        return merged
 
     def _upsert_cursor(
         self, connection: sqlite3.Connection, run_id: str, cursor: FileCursor

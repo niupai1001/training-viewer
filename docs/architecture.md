@@ -98,6 +98,7 @@ Training Viewer 是本机日志消费者，不是训练调度器：
 | `saved_views` | 保存的对比视图 | user_state | 否 |
 | `runs` | 运行身份、项目/实验组、状态、元数据 JSON、目录、最后更新时间 | index | 是 |
 | `metric_points` | `run_id、phase、metric_name、step、epoch、timestamp、session_id、value、来源文件/偏移` | index | 是 |
+| `metric_rollups` | 按轴的细粒度物化桶（count/first/min/max/last） | index | 是（随指标重建） |
 | `artifacts` | 产物引用、角色、样本/分组、文件存在性与大小 | index | 是 |
 | `training_events` | 生命周期与心跳 | index | 是 |
 | `ingestion_cursors` | 每个文件已消费位置、文件身份、大小、mtime | index | 是 |

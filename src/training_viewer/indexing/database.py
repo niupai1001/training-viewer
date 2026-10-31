@@ -80,6 +80,22 @@ CREATE INDEX IF NOT EXISTS idx_metric_points_time_cover
     ON metric_points(run_id, phase, metric_name, timestamp, value, global_step, epoch, session_id);
 CREATE INDEX IF NOT EXISTS idx_metric_points_run_id ON metric_points(run_id, id);
 
+CREATE TABLE IF NOT EXISTS metric_rollups (
+    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+    phase TEXT NOT NULL,
+    metric_name TEXT NOT NULL,
+    axis TEXT NOT NULL,
+    bucket INTEGER NOT NULL,
+    point_count INTEGER NOT NULL,
+    first_json TEXT NOT NULL,
+    min_json TEXT NOT NULL,
+    max_json TEXT NOT NULL,
+    last_json TEXT NOT NULL,
+    PRIMARY KEY(run_id, phase, metric_name, axis, bucket)
+);
+CREATE INDEX IF NOT EXISTS idx_metric_rollups_lookup
+    ON metric_rollups(run_id, phase, metric_name, axis, bucket);
+
 CREATE TABLE IF NOT EXISTS artifacts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,

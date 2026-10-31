@@ -46,3 +46,11 @@ def test_downsampling_preserves_extremes_and_uses_raw_best_last(viewer) -> None:
     sampled = series["points"]
     assert any(point["value"] == 0.01 for point in sampled)
     assert any(point["value"] == 99.0 for point in sampled)
+
+    with service.database.connection() as connection:
+        row = connection.execute(
+            "SELECT COUNT(*), SUM(point_count) FROM metric_rollups WHERE run_id = ? AND axis = 'global_step'",
+            ("run-0001",),
+        ).fetchone()
+    assert row[0] > 0
+    assert row[1] == 5000

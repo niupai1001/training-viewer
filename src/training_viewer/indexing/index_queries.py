@@ -882,6 +882,29 @@ class IndexQueries:
                 (run_id, phase, metric_name),
             ).fetchall()
             return list(rows), total, False
+        rollups = connection.execute(
+            """
+            SELECT bucket, point_count, first_json, min_json, max_json, last_json
+            FROM metric_rollups
+            WHERE run_id = ? AND phase = ? AND metric_name = ? AND axis = ?
+            ORDER BY bucket
+            """,
+            (run_id, phase, metric_name, axis),
+        ).fetchall()
+        if rollups and sum(row["point_count"] for row in rollups) == total:
+            points: list[dict] = []
+            seen: set[tuple] = set()
+            for row in rollups:
+                for column in ("first_json", "min_json", "max_json", "last_json"):
+                    point = json.loads(row[column])
+                    key = (point["x"], point["value"], point.get("session_id"))
+                    if key not in seen:
+                        seen.add(key)
+                        points.append(point)
+            points.sort(key=lambda item: (item["x"], item["value"]))
+            if len(points) > max_points:
+                points = self._downsample(points, max_points)
+            return points, total, len(points) < total
         bucket_count = max(1, max_points // 4)
         rows = connection.execute(
             f"""
@@ -922,6 +945,8 @@ class IndexQueries:
 
     @staticmethod
     def _point_payload(row, axis: str) -> dict:
+        if isinstance(row, dict):
+            return row
         if axis == "timestamp":
             x = epoch_seconds_from_iso(row["timestamp"]) if row["timestamp"] else None
         elif "x" in row.keys():

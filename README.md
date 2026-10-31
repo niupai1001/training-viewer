@@ -307,7 +307,7 @@ npm run build
 - 没有用户的 62 个真实来源，未生成真实来源清单与 53→62 解释；工具为 `tools/export_source_inventory.py`。
 - 训练环境与查看器环境默认分离：`attach` 在查看器所在机器执行；跨机器场景只完成日志写入，由本机挂载或 SSH 隧道访问。
 
-性能上，曲线查询在 SQLite 内做最小-最大/首尾分桶，Best/Last 始终基于全量原始记录。10 万点以内交互可用；100 万点索引约 43 秒、首次查询约 3.5 秒、索引库约 1.57 GB，尚未做物化桶或缩放区间查询（见 [`docs/performance.md`](docs/performance.md)）。
+性能上，曲线查询在 SQLite 内做最小-最大/首尾分桶并使用物化桶，Best/Last 始终基于全量原始记录。10 万点以内交互可用；100 万点索引约 44 秒、首次查询约 3.1 秒、索引库约 1.66 GB，尚未做缩放区间查询（见 [`docs/performance.md`](docs/performance.md)）。
 
 ## 文档与术语
 
