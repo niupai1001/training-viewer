@@ -264,7 +264,11 @@ function WorkspaceComparison({
   const firstId = selectedIds[0];
   const keysState = useApi(() => api.metricKeys(firstId), [firstId, liveVersion]);
   const seriesKeys = useMemo(
-    () => recommendedCompareKeys(keysState.data?.metric_keys ?? []),
+    () =>
+      recommendedCompareKeys(
+        keysState.data?.metric_keys ?? [],
+        window.localStorage.getItem("training-viewer.last-primary-metric"),
+      ),
     [keysState.data],
   );
   const compareState = useApi<CompareResult | null>(
@@ -344,26 +348,32 @@ function WorkspaceComparison({
   );
 }
 
-function recommendedCompareKeys(keys: MetricKey[]): string[] {
+function recommendedCompareKeys(keys: MetricKey[], preferredKey?: string | null): string[] {
+  const preferred = preferredKey ? keys.find((key) => key.key === preferredKey) : undefined;
   const lossKeys = keys
     .filter((key) => key.metric_name.toLowerCase().includes("loss") && key.phase === "train")
     .slice(0, 1)
     .map((key) => key.key);
-  const validation = keys
-    .filter(
-      (key) =>
-        ["val", "valid", "validation", "test", "eval"].includes(key.phase.toLowerCase()) &&
-        key.direction === "max" &&
-        !key.metric_name.toLowerCase().includes("loss"),
-    )
-    .sort((left, right) => {
-      const order = ["miou", "accuracy", "acc", "f1", "dice", "precision", "recall", "auc"];
-      const index = (key: MetricKey) =>
-        order.findIndex((token) => key.metric_name.toLowerCase().includes(token));
-      const leftIndex = index(left);
-      const rightIndex = index(right);
-      return (leftIndex < 0 ? 99 : leftIndex) - (rightIndex < 0 ? 99 : rightIndex);
-    })[0];
+  const validation = preferred &&
+    ["val", "valid", "validation", "test", "eval"].includes(preferred.phase.toLowerCase()) &&
+    preferred.direction === "max" &&
+    !preferred.metric_name.toLowerCase().includes("loss")
+    ? preferred
+    : keys
+        .filter(
+          (key) =>
+            ["val", "valid", "validation", "test", "eval"].includes(key.phase.toLowerCase()) &&
+            key.direction === "max" &&
+            !key.metric_name.toLowerCase().includes("loss"),
+        )
+        .sort((left, right) => {
+          const order = ["miou", "accuracy", "acc", "f1", "dice", "precision", "recall", "auc"];
+          const index = (key: MetricKey) =>
+            order.findIndex((token) => key.metric_name.toLowerCase().includes(token));
+          const leftIndex = index(left);
+          const rightIndex = index(right);
+          return (leftIndex < 0 ? 99 : leftIndex) - (rightIndex < 0 ? 99 : rightIndex);
+        })[0];
   return [...new Set([...lossKeys, ...(validation ? [validation.key] : [])])].slice(0, 2);
 }
 

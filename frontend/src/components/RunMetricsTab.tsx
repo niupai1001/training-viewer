@@ -72,6 +72,7 @@ export function RunMetricsTab({ run, chartLimit }: { run: RunDetail; chartLimit?
         setLimitMessage(`一次最多显示 ${MAX_SELECTED_METRICS} 条指标曲线，请先取消其它指标。`);
         return current;
       }
+      window.localStorage.setItem("training-viewer.last-primary-metric", key);
       return [...current, key];
     });
   }
