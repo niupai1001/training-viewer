@@ -29,22 +29,32 @@ async function assertViewport(width, height, suffix) {
   if (await page.locator(".project-tree").count()) {
     throw new Error("工作区仍存在重复的项目树导航");
   }
-  await page.getByText(/已选 2 \/ 2/).waitFor();
   await page.locator(".workspace-tree").waitFor();
-  await page.locator(".metric-chart-canvas canvas").first().waitFor({ timeout: 15000 });
+  await page.locator(".summary-card").first().waitFor({ timeout: 15000 });
+  if ((await page.locator(".summary-card").count()) !== 6) {
+    throw new Error("首屏六项监控摘要不完整");
+  }
+  if (await page.locator(".metric-chip").count()) {
+    throw new Error("默认工作区仍平铺指标按钮");
+  }
+  await page.locator(".core-chart-card .metric-chart-canvas canvas").first().waitFor({ timeout: 15000 });
   await page.screenshot({
     path: path.join(screenshotDir, `workspace-${suffix}.png`),
     fullPage: true,
   });
 
-  const chartBox = await page.locator(".metric-chart-canvas").first().boundingBox();
-  if (chartBox) {
-    await page.mouse.move(chartBox.x + chartBox.width / 2, chartBox.y + chartBox.height / 2);
-    await page.mouse.wheel(0, -600);
-    await page.getByText(/当前只查询/).waitFor({ timeout: 10000 });
-    await page.getByRole("button", { name: "重置区间" }).click();
-    await page.getByText(/当前只查询/).waitFor({ state: "hidden", timeout: 10000 });
-  }
+  await page.getByRole("button", { name: "后期", exact: true }).click();
+  await page.getByText(/后期聚焦/).waitFor({ timeout: 10000 });
+  await page.getByRole("button", { name: "全程", exact: true }).click();
+  await page.getByText(/后期聚焦/).waitFor({ state: "hidden", timeout: 10000 });
+
+  await page.getByRole("button", { name: /添加图表/ }).click();
+  await page.getByRole("dialog", { name: "添加图表或指标" }).waitFor();
+  await page.getByRole("searchbox", { name: "搜索指标" }).fill("accuracy");
+  await page.locator(".metric-row").first().waitFor({ timeout: 10000 });
+  await page.locator(".metric-row input[type=checkbox]").first().check();
+  await page.getByRole("button", { name: "添加为新图" }).click();
+  await page.locator(".custom-chart-card").first().waitFor({ timeout: 10000 });
 
   const groupIndex = await page.locator(".run-selector-experiment").evaluateAll((groups) =>
     groups.findIndex((group) => group.querySelectorAll(".run-selector-item").length >= 2),

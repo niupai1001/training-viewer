@@ -10,7 +10,7 @@ const name = `live-refresh-${Date.now()}`;
 const root = path.resolve("../.devtools", name);
 fs.mkdirSync(root, { recursive: true });
 const logFile = path.join(root, `${name}.jsonl`);
-fs.writeFileSync(logFile, `${JSON.stringify({ step: 1, loss: 1.0 })}\n`);
+fs.writeFileSync(logFile, `${JSON.stringify({ phase: "train", step: 1, loss: 1.0 })}\n`);
 
 const add = await fetch(`${baseUrl}api/v1/roots`, {
   method: "POST",
@@ -44,10 +44,20 @@ try {
     .locator(".run-selector-name")
     .filter({ hasText: new RegExp(`^${name}$`) })
     .click();
-  await page.getByText(/1 点/).first().waitFor({ timeout: 15000 });
+  const lossCard = page.locator(".summary-card").filter({ hasText: "Train Loss" });
+  await lossCard.locator("strong").waitFor();
+  await page.waitForFunction(() =>
+    Array.from(document.querySelectorAll(".summary-card"))
+      .find((card) => card.textContent?.includes("Train Loss"))
+      ?.querySelector("strong")?.textContent?.includes("1"),
+  );
 
-  fs.appendFileSync(logFile, `${JSON.stringify({ step: 2, loss: 0.8 })}\n`);
-  await page.getByText(/2 点/).first().waitFor({ timeout: 15000 });
+  fs.appendFileSync(logFile, `${JSON.stringify({ phase: "train", step: 2, loss: 0.8 })}\n`);
+  await page.waitForFunction(() =>
+    Array.from(document.querySelectorAll(".summary-card"))
+      .find((card) => card.textContent?.includes("Train Loss"))
+      ?.querySelector("strong")?.textContent?.includes("0.8"),
+  );
   console.log("Imported JSONL live refresh passed");
 } finally {
   await fetch(`${baseUrl}api/v1/roots/${rootId}`, { method: "DELETE" });

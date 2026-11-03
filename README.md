@@ -8,6 +8,8 @@
 
 ![训练工作区](docs/images/workspace-1440x900.png)
 
+![指标浏览器](docs/images/metric-browser.png)
+
 ## 已有训练日志：直接打开（零改造）
 
 如果训练已经跑过，日志是 TensorBoard 事件文件、CSV/TSV/JSONL，或普通的 `train.log` / `train.txt`，不需要改训练代码，也不需要先接写入器：
@@ -76,6 +78,9 @@ training-viewer attach D:\runs\my-project --json
 | 功能 | 页面 | 说明 |
 |---|---|---|
 | 项目 / 实验组 / 运行管理 | 训练工作区 / 设置与诊断 | 左树按项目/实验组组织；搜索、多选、状态/指标摘要；高级筛选在设置页 |
+| 默认监控 | 训练工作区 | 六项摘要（时间跨度、Epoch/Step、Train/Val Loss、最佳验证指标、LR）+ Train/Val Loss 同图 + 主验证指标；缺失显示“未记录” |
+| 海量指标 | 训练工作区 | 默认不平铺指标按钮；抽屉内服务端搜索、分组、阶段筛选、分页加载；连续曲线与单点评估分流 |
+| 自定义图表 | 训练工作区 | 选择原始 key 新建/加入图表，按 Run 保存轴、单位、标题和类型；缺失字段显式提示 |
 | 实时曲线 | 训练工作区 | 左侧选 Run，右侧直接显示当前/最近训练的 Loss 与验证指标；按真实数据自动选择优化步或训练轮次，不伪造 Step |
 | 多实验对比 | 训练工作区 | 左树勾选第二个 Run 即自动叠加共同指标；不跳转独立比较页，不插值；不可排名时显示原因 |
 | 逻辑实验 | 训练工作区 / 设置与诊断 | 默认一文件一 Run；用户确认后可将同目录多文件归并为一个逻辑实验，sidecar 可撤销 |
@@ -85,9 +90,6 @@ training-viewer attach D:\runs\my-project --json
 | 日志格式适配 | 日志来源 | 标准 TVLP、TensorBoard 事件文件（可选依赖）、CSV 指标表、任意文件名 CSV/TSV/JSONL、普通文本日志 |
 | 插件扩展 | — | 日志来源适配器、导出器、前端产物视图均有显式注册表；第三方来源可通过 Python entry point 安装 |
 | 训练侧接入 | — | `TrainingRunWriter`（仅标准库）、Agent 接入契约、后台 `attach`；仅新实验需要 |
-| 入口 | — | `training-viewer open/serve/validate/attach/status/stop`、实例复用、VS Code 扩展与 VSIX |
-| 插件扩展 | — | 日志来源适配器、导出器、前端产物视图均有显式注册表；第三方来源可通过 Python entry point 安装 |
-| 训练侧接入 | — | `TrainingRunWriter`（仅标准库）、Agent 接入契约、后台 `attach` |
 | 入口 | — | `training-viewer open/serve/validate/attach/status/stop`、实例复用、VS Code 扩展与 VSIX |
 
 ## 快速开始
@@ -284,7 +286,7 @@ npm run build
 
 测试覆盖：完整行/半行/坏行、截断重建、重复导入、断点续训、状态/活动分离、同 Step 多阶段、自动横轴、CSV 映射、TensorBoard 标量、任意 CSV/TSV/JSONL/文本、run_id 冲突、目录移动、增量扫描、降采样与原始 Best/Last、产物路径穿越、Host/Origin 校验、导出、CLI 校验、训练写入器与恢复会话。后端当前结果见下方命令输出，不在正文重复写死数字。
 
-前端另有 3 个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 在 1440×900 与 1366×768 覆盖工作区、多选叠加、项目筛选、缩放区间和设置页；`npm run e2e:live` 验证 imported JSONL 持续追加后曲线自动刷新。当前结果：**92 通过，2 跳过**。百万点、MLflow 原型与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
+前端另有 3 个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 在 1440×900 与 1366×768 覆盖默认概览、指标抽屉/搜索/添加图表、项目筛选、缩放区间和设置页；`npm run e2e:live` 验证 imported JSONL 持续追加后曲线自动刷新。当前结果：**98 通过，2 跳过**。百万点、MLflow 原型与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
 
 ## 已知限制
 
@@ -306,6 +308,9 @@ npm run build
 - 本版本只在 Windows 实机复验；已添加 Ubuntu/Windows/macOS CI 矩阵，但尚未在本次环境实际运行，macOS/Linux 的目录选择框、watchdog 与路径差异仍未独立确认。
 - 没有用户的 62 个真实来源，未生成真实来源清单与 53→62 解释；工具为 `tools/export_source_inventory.py`。
 - 训练环境与查看器环境默认分离：`attach` 在查看器所在机器执行；跨机器场景只完成日志写入，由本机挂载或 SSH 隧道访问。
+- 指标目录已区分连续曲线与单次评估，并提供服务端搜索/分页；用户自定义指标定义、10,000 指标虚拟化和单点热力图尚未实现。
+- 自定义图表保存在浏览器本地用户状态（按 Run id），不是 `user_state.sqlite3`；换浏览器/清站点数据会丢失。
+- TVLP 1.1 的四要素描述、Schema 与 Writer/Validator 升级尚未完成；当前仍读取 TVLP 1.0，历史日志缺失字段显示“未提供”。
 
 性能上，曲线查询在 SQLite 内做最小-最大/首尾分桶并使用物化桶，Best/Last 始终基于全量原始记录。10 万点以内交互可用；100 万点索引约 44 秒、首次查询约 3.1 秒、索引库约 1.66 GB；运行详情与工作区对比都支持缩放区间重查（见 [`docs/performance.md`](docs/performance.md)）。
 

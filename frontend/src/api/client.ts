@@ -8,6 +8,7 @@ import type {
   Facets,
   Meta,
   MetricQueryResult,
+  MetricCatalogResponse,
   MetricKey,
   ProjectTree,
   ResultCandidate,
@@ -116,6 +117,22 @@ export const api = {
   metricKeys: (runId: string) =>
     request<{ run_id: string; metric_keys: MetricKey[] }>(
       `/runs/${encodeURIComponent(runId)}/metric-keys`,
+    ),
+  metricCatalog: (
+    runId: string,
+    params: {
+      query?: string;
+      category?: string;
+      phase?: string;
+      value_kind?: string;
+      group?: string;
+      role?: string;
+      limit?: number;
+      cursor?: number;
+    } = {},
+  ) =>
+    request<MetricCatalogResponse>(
+      `/runs/${encodeURIComponent(runId)}/metric-catalog${queryString(params)}`,
     ),
   metrics: (
     runId: string,

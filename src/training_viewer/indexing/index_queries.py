@@ -12,6 +12,7 @@ from typing import Any
 
 from ..indexing.database import IndexDatabase
 from ..log_readers.base import epoch_seconds_from_iso, format_timestamp
+from ..metrics.metric_semantics import resolve_metric_semantics, value_profile
 
 VALID_AXES = ("global_step", "epoch", "timestamp")
 AXIS_REQUESTS = (*VALID_AXES, "auto")
@@ -55,10 +56,12 @@ class IndexQueries:
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._series_cache: dict[tuple, dict] = {}
         self._metric_keys_cache: dict[str, list[dict]] = {}
+        self._metric_catalog_cache: dict[str, list[dict]] = {}
 
     def invalidate_series_cache(self) -> None:
         self._series_cache.clear()
         self._metric_keys_cache.clear()
+        self._metric_catalog_cache.clear()
 
     # ------------------------------------------------------------------ 运行目录树
     def projects(self) -> dict:
@@ -535,6 +538,140 @@ class IndexQueries:
                     "event_count": event_row["event_count"],
                 }
         return sorted(sessions.values(), key=lambda item: item["first_seen"] or "")
+
+    def metric_catalog(
+        self,
+        run_id: str,
+        query: str | None = None,
+        category: str | None = None,
+        phase: str | None = None,
+        value_kind: str | None = None,
+        group: str | None = None,
+        role: str | None = None,
+        limit: int = 50,
+        cursor: int = 0,
+    ) -> dict | None:
+        with self.database.connection() as connection:
+            row = connection.execute(
+                "SELECT metadata_json FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            items = self._metric_catalog_items(
+                connection, run_id, json.loads(row["metadata_json"])
+            )
+        term = (query or "").strip().casefold()
+        filtered = []
+        for item in items:
+            if term:
+                haystack = " ".join(
+                    [
+                        item["raw_key"],
+                        item["display_name_zh"],
+                        item["display_name_en"],
+                        item["description"],
+                        item["category"],
+                        item["semantic_group"],
+                        " ".join(item["group_path"]),
+                    ]
+                ).casefold()
+                if term not in haystack:
+                    continue
+            if category and item["category"] != category:
+                continue
+            if phase and item["phase"] != phase:
+                continue
+            if value_kind and item["value_kind"] != value_kind:
+                continue
+            if group and group not in (item["semantic_group"], item["group_path"][0] if item["group_path"] else ""):
+                continue
+            if role and item["role"] != role:
+                continue
+            filtered.append(item)
+        facets = {
+            "category": {},
+            "semantic_group": {},
+            "phase": {},
+            "value_kind": {},
+        }
+        for item in filtered:
+            for facet, value in (
+                ("category", item["category"]),
+                ("semantic_group", item["semantic_group"]),
+                ("phase", item["phase"]),
+                ("value_kind", item["value_kind"]),
+            ):
+                facets[facet][value] = facets[facet].get(value, 0) + 1
+        limit = max(1, min(int(limit), 100))
+        cursor = max(0, int(cursor))
+        page = filtered[cursor : cursor + limit]
+        return {
+            "run_id": run_id,
+            "items": page,
+            "total": len(filtered),
+            "limit": limit,
+            "cursor": cursor,
+            "next_cursor": cursor + limit if cursor + limit < len(filtered) else None,
+            "facets": facets,
+        }
+
+    def _metric_catalog_items(self, connection, run_id: str, metadata: dict) -> list[dict]:
+        cached = self._metric_catalog_cache.get(run_id)
+        if cached is not None:
+            return cached
+        rows = connection.execute(
+            """
+            SELECT phase, metric_name, COUNT(*) AS point_count,
+                   COUNT(DISTINCT CASE WHEN global_step IS NOT NULL THEN global_step END) AS distinct_step,
+                   COUNT(DISTINCT CASE WHEN epoch IS NOT NULL THEN epoch END) AS distinct_epoch,
+                   COUNT(DISTINCT CASE WHEN timestamp IS NOT NULL THEN timestamp END) AS distinct_time
+            FROM metric_points WHERE run_id = ?
+            GROUP BY phase, metric_name
+            """,
+            (run_id,),
+        ).fetchall()
+        items = []
+        for row in rows:
+            raw_key = f"{row['phase']}/{row['metric_name']}"
+            _, definition = _definition_for(metadata, row["phase"], row["metric_name"])
+            item = resolve_metric_semantics(raw_key, row["phase"], row["metric_name"], definition)
+            axes, value_kind, distinct, suggested = value_profile(
+                row["point_count"],
+                row["distinct_step"] or 0,
+                row["distinct_epoch"] or 0,
+                row["distinct_time"] or 0,
+            )
+            if value_kind == "single_point" and item["semantic_group"] != "performance":
+                item["semantic_group"] = "evaluation"
+            items.append(
+                {
+                    **item,
+                    "display_name": item["display_name_zh"],
+                    "definition_source": item["source"],
+                    "point_count": row["point_count"],
+                    "distinct_x_count": distinct,
+                    "available_axes": axes,
+                    "value_kind": value_kind,
+                    "suggested_view": suggested,
+                }
+            )
+        role_rank = {
+            "train_loss": 0,
+            "val_loss": 1,
+            "primary_validation": 2,
+            "validation_score": 3,
+            "learning_rate": 4,
+        }
+        items.sort(
+            key=lambda item: (
+                role_rank.get(item["role"], 9),
+                item["semantic_group"] != "training_trend",
+                -item["point_count"],
+                item["raw_key"],
+            )
+        )
+        self._metric_catalog_cache[run_id] = items
+        return items
 
     def metric_keys(self, run_id: str) -> list[dict] | None:
         with self.database.connection() as connection:

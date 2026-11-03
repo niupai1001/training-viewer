@@ -13,7 +13,7 @@ import {
   StatusBadge,
 } from "../components/Common";
 import { RunSelector } from "../components/RunSelector";
-import { RunMetricsTab } from "../components/RunMetricsTab";
+import { TrainingOverview } from "../components/TrainingOverview";
 import { RunConfigTab } from "../components/RunConfigTab";
 import { RunDiagnosticsTab } from "../components/RunDiagnosticsTab";
 import { MetricChart } from "../components/MetricChart";
@@ -269,7 +269,7 @@ function WorkspaceRunPanel({
           </button>
         </div>
       </section>
-      <RunMetricsTab run={currentRun} chartLimit={2} maxSelected={2} compactControls />
+      <TrainingOverview run={currentRun} />
       <LatestArtifactPreview runId={currentRun.run_id} />
       <ResultCandidatePanel runId={currentRun.run_id} />
     </>

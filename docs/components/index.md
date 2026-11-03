@@ -12,7 +12,8 @@
 | 本机系统目录选择器 | `select_directory_with_system_dialog` | `system_directory_picker.py` | 在桌面环境弹出原生目录框，无 GUI 时明确报错 |
 | 运行目录扫描器 | `RunDirectoryScanner` | `discovery/run_directory_scanner.py` | 从根目录递归发现 Run，不跟随符号链接 |
 | 训练指标索引器 | `TrainingMetricIndexer` | `indexing/training_metric_indexer.py` | 增量写入 SQLite、维护游标、去重、推导状态 |
-| 索引查询 | `IndexQueries` | `indexing/index_queries.py` | 提供运行、曲线、对比、产物、诊断查询 |
+| 索引查询 | `IndexQueries` | `indexing/index_queries.py` | 提供运行、曲线、指标目录、对比、产物、诊断查询 |
+| 指标语义解析器 | `resolve_metric_semantics` | `metrics/metric_semantics.py` | 声明/别名/未知分流，不猜测科学含义 |
 | 日志更新监听器 | `LogUpdateWatcher` | `watch/log_update_watcher.py` | 轮询 + 文件事件触发同步 |
 | 查看器应用服务 | `TrainingViewerService` | `service.py` | 协调扫描/索引/状态/SSE/根目录 |
 | 路径安全守卫 | `path_guard` | `security/path_guard.py` | 拒绝绝对路径、穿越和越界符号链接 |
@@ -26,11 +27,14 @@
 | 指标曲线组件 | `MetricChart` | `frontend/src/components/MetricChart.tsx` | 绘制、缩放、平滑与导出曲线；空数据也保留容器 |
 | 日志根目录面板 | `RootDirectoriesPanel` | `frontend/src/components/RootDirectoriesPanel.tsx` | 输入/系统选择/移除/重新扫描根目录 |
 | 逻辑实验映射面板 | `LogicalRunMappingPanel` | `frontend/src/components/LogicalRunMappingPanel.tsx` | 用户确认来源文件归并，可撤销 |
-| 训练工作区 | `TrainingWorkspacePage` | `frontend/src/pages/TrainingWorkspacePage.tsx` | 左树、右侧单 Run/多选叠加、高级抽屉 |
+| 训练工作区 | `TrainingWorkspacePage` | `frontend/src/pages/TrainingWorkspacePage.tsx` | 唯一左栏、右侧概览/多选对比、高级抽屉 |
+| 训练概览 | `TrainingOverview` | `frontend/src/components/TrainingOverview.tsx` | 六项摘要、Loss/验证核心图、自定义图表 |
+| 指标浏览器 | `MetricBrowserDrawer` | `frontend/src/components/MetricBrowserDrawer.tsx` | 搜索/分组/分页选择指标，连续/单点分流 |
+| 单点评估表 | `MetricEvaluationTable` | `frontend/src/components/MetricEvaluationTable.tsx` | 单次结果表格 |
 | 来源清单面板 | `SourceInventoryPanel` | `frontend/src/components/SourceInventoryPanel.tsx` | 原始文件 → 逻辑实验的可审计清单 |
 | 结果候选面板 | `ResultCandidatePanel` | `frontend/src/components/ResultCandidatePanel.tsx` | 展示未确认的路径发现图片 |
 | 最新产物预览 | `LatestArtifactPreview` | `frontend/src/components/LatestArtifactPreview.tsx` | 运行页顶部展示最新预测样本 |
-| 实验对比页面 | `ComparisonPage` | `frontend/src/pages/ComparisonPage.tsx` | 多运行叠加、Best/Last、超参数差异 |
+| 实验对比页面 | `WorkspaceComparison`（工作区内） | `frontend/src/pages/TrainingWorkspacePage.tsx` | 多运行叠加、Best/Last、超参数差异 |
 | 预测结果对照器 | `PredictionComparisonViewer` | `frontend/src/components/PredictionComparisonViewer.tsx` | 按样本/Epoch 并排或叠加图像 |
 | 实验产物视图插件 | `artifactViews` | `frontend/src/view_plugins/artifactViews.tsx` | 按产物类型选择预览组件 |
 | 页面组合 | 各 Page 组件 | `frontend/src/pages/` | 总览、实验管理、运行详情、结果、诊断 |
@@ -47,6 +51,9 @@
 - [运行目录扫描器](run-directory-scanner.md)
 - [训练指标索引器](training-metric-indexer.md)
 - [索引查询](index-queries.md)
+- [指标目录与语义分流](metric-catalog.md)
+- [指标浏览器](metric-browser.md)
+- [训练概览](training-overview.md)
 - [日志更新监听器](log-update-watcher.md)
 - [查看器应用服务](training-viewer-service.md)
 - [路径安全守卫](path-guard.md)

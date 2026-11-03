@@ -74,6 +74,7 @@ Training Viewer 是本机日志消费者，不是训练调度器：
 | 运行元数据读取器 | `RunMetadataReader` | `run_metadata.py` | `run.json` → 校验后的元数据字典 |
 | 训练指标索引器 | `TrainingMetricIndexer` | `indexing/training_metric_indexer.py` | 发现结果 → SQLite 索引与状态 |
 | 索引查询 | `IndexQueries` | `indexing/index_queries.py` | SQLite → 页面/导出的数据结构 |
+| 指标语义 | `MetricSemanticResolver` | `metrics/metric_semantics.py` | 原始键 + 声明 → 可读名/类别/角色/未知标记 |
 | 日志更新监听器 | `LogUpdateWatcher` | `watch/log_update_watcher.py` | 定时器/文件事件 → 同步调用 |
 | 查看器应用服务 | `TrainingViewerService` | `service.py` | 根目录/同步/订阅 → 应用状态与 SSE 消息 |
 | HTTP API 应用 | `create_application` | `api/app.py` | 服务 → REST + SSE + 静态资源 |

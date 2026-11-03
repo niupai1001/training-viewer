@@ -250,6 +250,50 @@ export interface SeriesPayload {
   warnings: WarningItem[];
 }
 
+export interface MetricCatalogItem {
+  raw_key: string;
+  phase: string;
+  metric_name: string;
+  display_name: string;
+  display_name_zh: string;
+  display_name_en: string;
+  category: string;
+  semantic_group: string;
+  description: string;
+  definition: string | null;
+  definition_source: string;
+  source: string;
+  confidence: string;
+  unit: string | null;
+  direction: string;
+  aggregation: string | null;
+  comparison_key: string | null;
+  is_primary: boolean;
+  default_visibility: boolean;
+  role: string;
+  group_path: string[];
+  point_count: number;
+  distinct_x_count: number;
+  available_axes: Axis[];
+  value_kind: "continuous" | "single_point" | "no_data";
+  suggested_view: "line" | "evaluation_table" | "raw";
+}
+
+export interface MetricCatalogResponse {
+  run_id: string;
+  items: MetricCatalogItem[];
+  total: number;
+  limit: number;
+  cursor: number;
+  next_cursor: number | null;
+  facets: {
+    category: Record<string, number>;
+    semantic_group: Record<string, number>;
+    phase: Record<string, number>;
+    value_kind: Record<string, number>;
+  };
+}
+
 export interface MetricQueryResult {
   run_id: string;
   run_name: string;

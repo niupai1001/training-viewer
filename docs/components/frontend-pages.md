@@ -19,7 +19,7 @@
 
 | 页面 | 中文名 | 输入 | 输出 / 关键行为 |
 |---|---|---|---|
-| `TrainingWorkspacePage` | 训练工作区 | 运行列表、上次选择、路由 run(s) | 左树、右侧单 Run/多选叠加、高级抽屉；旧 `/runs`、`/compare` 路由转发 |
+| `TrainingWorkspacePage` | 训练工作区 | 运行列表、上次选择、路由 run(s) | 唯一左栏、`TrainingOverview` 六项摘要/核心曲线、`MetricBrowserDrawer` 自定义图表；旧路由转发 |
 | `ResultsPage` | 预测结果 | `run`、可选 `tag` | 运行/标签选择、样本对照、全部产物（从工作区进入） |
 | `DiagnosticsPage` | 设置与诊断 | 诊断数据、适配器、同步状态 | 根目录管理、来源映射、目录问题、run_id 冲突、重新扫描 |
 

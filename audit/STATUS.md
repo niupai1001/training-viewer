@@ -19,6 +19,7 @@
 | P1-08 比较交互 | **完成（首版）** | 统一工作区多选自动叠加；比较默认指标取所有选中 Run 的共同指标，Loss + 验证指标；Best/Last、超参数差异、不可排名原因；对比缩放接区间 |
 | P1-09 上次 Run | **完成** | 浏览器本地记住主动选择；示例 Run 不优先抢占真实运行 |
 | P2-10 缓存/用户状态混用 | **完成** | `index.sqlite3` 可重建；`user_state.sqlite3` 保存根目录/备注/收藏/视图；删索引测试通过 |
+| C10/A16–A24 指标目录与分流 | **Partial** | 指标语义/目录 API、抽屉搜索分页、单点评估表、自定义图表；1000 指标 40 项/46 KB/31 ms；10k 与用户指标定义未完成 |
 
 ## 2. 架构与界面
 
@@ -40,13 +41,14 @@ npm run typecheck
 npm test
 npm run build
 npm run e2e
+npm run e2e:live
 python tools/benchmark_viewer.py --points 1000000
 python tools/cuda_writer_smoke.py
 ```
 
 当前本机结果：
 
-- `92 passed, 2 skipped`
+- `98 passed, 2 skipped`
 - 前端 3 个 Vitest 通过
 - E2E 通过（真实 Chrome，含滚轮缩放/重置）
 - 1M：索引 44.4 s，首次查询 3.14 s，库 1.66 GB

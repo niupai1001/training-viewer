@@ -55,6 +55,7 @@
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/runs/{run_id}/metric-keys` | 指标键、单位、方向、定义、点数、Best/Last |
+| GET | `/runs/{run_id}/metric-catalog?query=&group=&phase=&value_kind=&limit=40&cursor=0` | 可搜索指标目录；区分连续/单点，分页 |
 | GET | `/runs/{run_id}/metrics?series=val/miou&series=train/loss&axis=auto&max_points=2000&x_min=100&x_max=500` | 单运行多指标曲线；可选区间 |
 | POST | `/compare/query` | 多运行对比；请求体同样支持 `x_min` / `x_max` |
 | GET | `/runs/{run_id}/metrics/export?series=...&axis=...&format=csv&smoothing_method=ema&smoothing_window=5&scale=linear` | 下载单运行数据 |
@@ -63,6 +64,8 @@
 `axis` 可为 `global_step`、`epoch`、`timestamp`、`auto`（默认）。`auto` 按每个指标真实存在的字段选择：优先 `global_step`，否则 `epoch`，否则 `timestamp`；不会伪造 Step。时间轴返回 Unix 秒，前端按浏览器本地时区显示。响应中每个 series 带自己的 `axis`。
 
 `x_min` / `x_max` 可选，按当前轴的单位限制查询区间；时间轴用 Unix 秒。区间查询仍返回该区间内的 `total_points`，不会伪造区间外的点。运行详情与训练工作区对比都已把 ECharts `dataZoom` 事件接到该参数；缩放后按区间重查，并显示“当前只查询 … 区间 / 重置区间”。
+
+指标目录的 `group` 是展示分组（`training_trend` / `performance` / `evaluation` / `other`），`phase` 是独立维度；`value_kind=single_point` 表示只有 0 或 1 个不同有效 X 值，即使原始行有 200 条也不按趋势曲线返回。目录响应包含 `facets` 与 `next_cursor`，前端每批 40 项加载。
 
 ### 曲线响应要点
 

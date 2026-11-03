@@ -30,6 +30,35 @@ def metric_keys(run_id: str, service: TrainingViewerService = Depends(get_servic
     return {"run_id": run_id, "metric_keys": keys}
 
 
+@router.get("/runs/{run_id}/metric-catalog")
+def metric_catalog(
+    run_id: str,
+    query: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    phase: str | None = Query(default=None),
+    value_kind: str | None = Query(default=None),
+    group: str | None = Query(default=None),
+    role: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: int = Query(default=0, ge=0),
+    service: TrainingViewerService = Depends(get_service),
+) -> dict:
+    result = service.queries.metric_catalog(
+        run_id,
+        query=query,
+        category=category,
+        phase=phase,
+        value_kind=value_kind,
+        group=group,
+        role=role,
+        limit=limit,
+        cursor=cursor,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"找不到运行：{run_id}")
+    return result
+
+
 @router.get("/runs/{run_id}/metrics")
 def query_metrics(
     run_id: str,
