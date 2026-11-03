@@ -75,7 +75,14 @@ def main() -> int:
         return 2
     folder=Path(sys.argv[1]).resolve()
     fails = total = 0
-    for name,schema_name,label in [('run.json','run.schema.json','run'),('metrics.jsonl','metrics.schema.json','metrics'),('events.jsonl','events.schema.json','events')]:
+    run_schema='run.schema.json'
+    try:
+        version=read_json(folder/'run.json').get('schema_version')
+        if version=='1.1':
+            run_schema='run-1.1.schema.json'
+    except (OSError, ValueError, AttributeError):
+        pass
+    for name,schema_name,label in [('run.json',run_schema,'run'),('metrics.jsonl','metrics.schema.json','metrics'),('events.jsonl','events.schema.json','events')]:
         schema=read_json(BASE/'schemas'/schema_name)
         f,n=check(folder/name,schema,label)
         fails+=f;total+=n

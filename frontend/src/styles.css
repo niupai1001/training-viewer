@@ -2505,6 +2505,34 @@ textarea {
   line-height: 1.8;
 }
 
+.experiment-description {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.experiment-description > summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.experiment-description dl {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 10px 0 0;
+}
+
+.experiment-description dt {
+  color: var(--muted);
+}
+
+.experiment-description dd {
+  margin: 0;
+}
+
 .chart-mode-switch {
   display: inline-flex;
   gap: 2px;

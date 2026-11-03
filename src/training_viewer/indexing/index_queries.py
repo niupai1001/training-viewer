@@ -539,6 +539,178 @@ class IndexQueries:
                 }
         return sorted(sessions.values(), key=lambda item: item["first_seen"] or "")
 
+    def get_monitoring_summary(self, run_id: str) -> dict | None:
+        """统一监控摘要；时间跨度与生命周期累计时长严格分开。"""
+        with self.database.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            metadata = json.loads(row["metadata_json"])
+            items = self._metric_catalog_items(connection, run_id, metadata)
+            time_range = self._time_ranges(connection, [run_id]).get(run_id) or {}
+            events = connection.execute(
+                """
+                SELECT status, timestamp, session_id FROM training_events
+                WHERE run_id = ? AND event_type = 'lifecycle'
+                ORDER BY timestamp ASC, id ASC
+                """,
+                (run_id,),
+            ).fetchall()
+            timing = self._monitoring_timing(events, time_range)
+            latest = connection.execute(
+                """
+                SELECT global_step, epoch, timestamp FROM metric_points
+                WHERE run_id = ? AND (global_step IS NOT NULL OR epoch IS NOT NULL)
+                ORDER BY timestamp DESC, id DESC LIMIT 1
+                """,
+                (run_id,),
+            ).fetchone()
+            by_role = {item["role"]: item for item in items}
+            primary = (
+                next((item for item in items if item["is_primary"]), None)
+                or next((item for item in items if item["role"] == "validation_score" and item["direction"] == "max"), None)
+                or by_role.get("validation_score")
+            )
+            train_loss = by_role.get("train_loss")
+            val_loss = by_role.get("val_loss")
+            learning_rate = by_role.get("learning_rate")
+
+            def latest_value(item: dict | None) -> dict | None:
+                if item is None:
+                    return None
+                point = connection.execute(
+                    """
+                    SELECT value, global_step, epoch, timestamp FROM metric_points
+                    WHERE run_id = ? AND phase = ? AND metric_name = ?
+                    ORDER BY timestamp DESC, id DESC LIMIT 1
+                    """,
+                    (run_id, item["phase"], item["metric_name"]),
+                ).fetchone()
+                if point is None:
+                    return None
+                return {
+                    "value": point["value"],
+                    "global_step": point["global_step"],
+                    "epoch": point["epoch"],
+                    "timestamp": point["timestamp"],
+                }
+
+            def best_value(item: dict | None) -> dict | None:
+                if item is None or item["direction"] not in ("min", "max"):
+                    return None
+                _, definition = _definition_for(metadata, item["phase"], item["metric_name"])
+                best = self._best_point(connection, run_id, item["phase"], item["metric_name"], definition)
+                return best
+
+            payload = {
+                "run_id": run_id,
+                "name": row["name"],
+                "status": row["status"],
+                "status_label": STATUS_LABELS.get(row["status"], row["status"]),
+                "status_reason": row["status_reason"],
+                "activity": self._activity_for(row["status"], time_range.get("last_metric_at")),
+                "activity_label": ACTIVITY_LABELS.get(
+                    self._activity_for(row["status"], time_range.get("last_metric_at")),
+                    self._activity_for(row["status"], time_range.get("last_metric_at")),
+                ),
+                "last_log_at": max(
+                    [value for value in (time_range.get("last_metric_at"), self._last_event_at(events)) if value],
+                    default=None,
+                ),
+                "timing": timing,
+                "current_epoch": latest["epoch"] if latest else None,
+                "current_global_step": latest["global_step"] if latest else None,
+                "planned_epochs": (metadata.get("config") or {}).get("epochs"),
+                "train_loss": self._summary_metric(train_loss, latest_value(train_loss)),
+                "val_loss": self._summary_metric(val_loss, latest_value(val_loss)),
+                "primary_validation_metric": self._summary_metric(
+                    primary, latest_value(primary), best_value(primary), is_primary=True
+                ),
+                "learning_rate": self._summary_metric(learning_rate, latest_value(learning_rate)),
+            }
+        return payload
+
+    @staticmethod
+    def _summary_metric(
+        item: dict | None,
+        latest: dict | None,
+        best: dict | None = None,
+        is_primary: bool = False,
+    ) -> dict | None:
+        if item is None:
+            return None
+        return {
+            "raw_key": item["raw_key"],
+            "display_name": item["display_name_zh"],
+            "unit": item["unit"],
+            "direction": item["direction"],
+            "source": item["definition_source"],
+            "latest": latest,
+            "best": best,
+            "is_primary": is_primary,
+        }
+
+    @staticmethod
+    def _last_event_at(events) -> str | None:
+        return events[-1]["timestamp"] if events else None
+
+    def _monitoring_timing(self, events, time_range: dict) -> dict:
+        metric_first = time_range.get("started_at")
+        metric_last = time_range.get("last_metric_at")
+        metric_span = time_range.get("duration_seconds")
+        starts: dict[str | None, float] = {}
+        active = 0.0
+        lifecycle_start = None
+        lifecycle_end = None
+        open_session = False
+        for event in events:
+            session = event["session_id"]
+            timestamp = event["timestamp"]
+            try:
+                seconds = epoch_seconds_from_iso(timestamp)
+            except ValueError:
+                continue
+            if event["status"] in ("started", "resumed"):
+                starts[session] = seconds
+                lifecycle_start = lifecycle_start or timestamp
+            elif event["status"] in ("completed", "failed", "cancelled") and session in starts:
+                active += max(0.0, seconds - starts.pop(session))
+                lifecycle_end = timestamp
+            elif event["status"] == "completed":
+                lifecycle_end = timestamp
+        open_session = bool(starts)
+        if open_session and metric_last:
+            # 开放会话只有最后指标作为活动证据；标记估算，不能当作已确认训练时长。
+            for seconds in starts.values():
+                try:
+                    active += max(0.0, epoch_seconds_from_iso(metric_last) - seconds)
+                except ValueError:
+                    pass
+        if events:
+            if lifecycle_start and lifecycle_end:
+                wall = max(0.0, epoch_seconds_from_iso(lifecycle_end) - epoch_seconds_from_iso(lifecycle_start))
+                source = "lifecycle_events"
+                quality = "complete" if not open_session else "partial"
+            else:
+                wall = metric_span or 0.0
+                source = "metric_timestamps"
+                quality = "partial" if metric_span is not None else "unavailable"
+        else:
+            wall = metric_span or 0.0
+            source = "metric_timestamps" if metric_span is not None else "unavailable"
+            quality = "partial" if metric_span is not None else "unavailable"
+        return {
+            "active_training_seconds": round(active, 3) if events or open_session else None,
+            "wall_span_seconds": round(wall, 3) if source != "unavailable" else None,
+            "source": source,
+            "quality": quality,
+            "open_session": open_session,
+            "metric_first_at": metric_first,
+            "metric_last_at": metric_last,
+        }
+
     def metric_catalog(
         self,
         run_id: str,

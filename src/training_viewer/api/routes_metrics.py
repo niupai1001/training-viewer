@@ -30,6 +30,16 @@ def metric_keys(run_id: str, service: TrainingViewerService = Depends(get_servic
     return {"run_id": run_id, "metric_keys": keys}
 
 
+@router.get("/runs/{run_id}/summary")
+def run_summary(
+    run_id: str, service: TrainingViewerService = Depends(get_service)
+) -> dict:
+    summary = service.queries.get_monitoring_summary(run_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail=f"找不到运行：{run_id}")
+    return summary
+
+
 @router.get("/runs/{run_id}/metric-catalog")
 def metric_catalog(
     run_id: str,

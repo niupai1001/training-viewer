@@ -42,7 +42,7 @@ npm run e2e
 npm run e2e:live
 ```
 
-本机结果：后端 98 passed, 2 skipped（含新增 6 个指标测试）；前端 3 Vitest；E2E 通过。
+本机结果：后端 104 passed, 2 skipped；前端 3 Vitest；E2E 通过。
 
 ## 图片
 

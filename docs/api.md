@@ -56,6 +56,7 @@
 |---|---|---|
 | GET | `/runs/{run_id}/metric-keys` | 指标键、单位、方向、定义、点数、Best/Last |
 | GET | `/runs/{run_id}/metric-catalog?query=&group=&phase=&value_kind=&limit=40&cursor=0` | 可搜索指标目录；区分连续/单点，分页 |
+| GET | `/runs/{run_id}/summary` | 统一监控摘要：生命周期时长/日志跨度、Epoch/Step、Train/Val Loss、主验证指标、LR |
 | GET | `/runs/{run_id}/metrics?series=val/miou&series=train/loss&axis=auto&max_points=2000&x_min=100&x_max=500` | 单运行多指标曲线；可选区间 |
 | POST | `/compare/query` | 多运行对比；请求体同样支持 `x_min` / `x_max` |
 | GET | `/runs/{run_id}/metrics/export?series=...&axis=...&format=csv&smoothing_method=ema&smoothing_window=5&scale=linear` | 下载单运行数据 |

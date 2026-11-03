@@ -155,6 +155,14 @@ export interface ArtifactTagCount {
   count: number;
 }
 
+export interface ExperimentDescription {
+  data_description: string;
+  model_architecture: string;
+  modification_plan: string;
+  research_objective: string;
+  change_details?: string;
+}
+
 export interface RunMetadata {
   schema_version: string;
   run_id: string;
@@ -163,6 +171,7 @@ export interface RunMetadata {
   name: string;
   created_at: string;
   task?: string;
+  experiment_description?: ExperimentDescription;
   model?: RunModel;
   dataset?: RunDataset;
   config?: Record<string, unknown>;
@@ -248,6 +257,44 @@ export interface SeriesPayload {
   best: MetricPointValue | null;
   last: MetricPointValue | null;
   warnings: WarningItem[];
+}
+
+export interface MonitoringMetricValue {
+  raw_key: string;
+  display_name: string;
+  unit: string | null;
+  direction: string;
+  source: string;
+  latest: SeriesPoint | null;
+  best: MetricPointValue | null;
+  is_primary: boolean;
+}
+
+export interface RunMonitoringSummary {
+  run_id: string;
+  name: string;
+  status: string;
+  status_label: string;
+  status_reason: string;
+  activity: string;
+  activity_label: string;
+  last_log_at: string | null;
+  timing: {
+    active_training_seconds: number | null;
+    wall_span_seconds: number | null;
+    source: string;
+    quality: string;
+    open_session: boolean;
+    metric_first_at: string | null;
+    metric_last_at: string | null;
+  };
+  current_epoch: number | null;
+  current_global_step: number | null;
+  planned_epochs: number | null;
+  train_loss: MonitoringMetricValue | null;
+  val_loss: MonitoringMetricValue | null;
+  primary_validation_metric: MonitoringMetricValue | null;
+  learning_rate: MonitoringMetricValue | null;
 }
 
 export interface MetricCatalogItem {

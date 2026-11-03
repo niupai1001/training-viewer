@@ -18,22 +18,38 @@ _ALLOWED_FIELDS = {
     "name",
     "created_at",
     "task",
+    "experiment_description",
     "model",
     "dataset",
     "config",
     "source",
     "tags",
     "metric_definitions",
+    "metric_groups",
     "extensions",
 }
 _ALLOWED_METRIC_DEFINITION_FIELDS = {
     "display_name",
+    "display_name_en",
     "direction",
     "unit",
     "description",
     "comparison_key",
     "aggregation",
     "definition",
+    "category",
+    "semantic_group",
+    "suggested_view",
+    "default_visibility",
+    "is_primary",
+}
+_V11_ONLY_METRIC_FIELDS = {
+    "display_name_en",
+    "category",
+    "semantic_group",
+    "suggested_view",
+    "default_visibility",
+    "is_primary",
 }
 
 
@@ -66,12 +82,29 @@ class RunMetadataReader:
         unknown = sorted(set(data) - _ALLOWED_FIELDS)
         if unknown:
             raise InvalidRunDirectoryError(f"run.json 含未知字段：{', '.join(unknown)}")
-        if data.get("schema_version") != "1.0":
-            raise InvalidRunDirectoryError("schema_version 必须为字符串 \"1.0\"")
+        if data.get("schema_version") not in ("1.0", "1.1"):
+            raise InvalidRunDirectoryError("schema_version 必须为字符串 \"1.0\" 或 \"1.1\"")
         run_id = require_string(data.get("run_id"), "run_id")
         require_string(data.get("project"), "project")
         require_string(data.get("name"), "name")
         created_at = parse_timestamp(data.get("created_at"), "created_at")
+        if data.get("schema_version") == "1.1":
+            description = require_object(data.get("experiment_description"), "experiment_description")
+            for field in (
+                "data_description",
+                "model_architecture",
+                "modification_plan",
+                "research_objective",
+            ):
+                value = require_string(description.get(field), f"experiment_description.{field}")
+                if not value.strip():
+                    raise InvalidRunDirectoryError(
+                        f"experiment_description.{field} 不能为空"
+                    )
+            if "change_details" in description:
+                require_string(description["change_details"], "experiment_description.change_details")
+        elif "experiment_description" in data:
+            raise InvalidRunDirectoryError("TVLP 1.0 不应包含 experiment_description；请使用 schema_version 1.1")
         if "experiment" in data:
             require_string(data.get("experiment"), "experiment")
         if "task" in data:
@@ -89,6 +122,10 @@ class RunMetadataReader:
             require_object(data.get("source"), "source")
         if "extensions" in data:
             require_object(data.get("extensions"), "extensions")
+        if "metric_groups" in data:
+            if data.get("schema_version") == "1.0":
+                raise InvalidRunDirectoryError("metric_groups 只允许用于 schema_version 1.1")
+            require_object(data.get("metric_groups"), "metric_groups")
         if "tags" in data:
             tags = data.get("tags")
             if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
@@ -101,6 +138,12 @@ class RunMetadataReader:
             for metric_key, definition in definitions.items():
                 require_string(metric_key, "metric_definitions 的键")
                 entry = require_object(definition, f"metric_definitions[{metric_key}]")
+                if data.get("schema_version") == "1.0":
+                    v11_fields = sorted(set(entry) & _V11_ONLY_METRIC_FIELDS)
+                    if v11_fields:
+                        raise InvalidRunDirectoryError(
+                            f"metric_definitions[{metric_key}] 的 {', '.join(v11_fields)} 只允许用于 schema_version 1.1"
+                        )
                 unknown_definition_fields = sorted(set(entry) - _ALLOWED_METRIC_DEFINITION_FIELDS)
                 if unknown_definition_fields:
                     raise InvalidRunDirectoryError(
@@ -108,13 +151,30 @@ class RunMetadataReader:
                         f"{', '.join(unknown_definition_fields)}"
                     )
                 if entry.get("direction") not in ("min", "max", "none"):
-                    raise InvalidRunDirectoryError(
-                        f"metric_definitions[{metric_key}].direction 必须是 min、max 或 none"
-                    )
-                for option in ("display_name", "unit", "description", "comparison_key", "aggregation", "definition"):
+                    if data.get("schema_version") == "1.0" or "direction" in entry:
+                        raise InvalidRunDirectoryError(
+                            f"metric_definitions[{metric_key}].direction 必须是 min、max 或 none"
+                        )
+                for option in (
+                    "display_name",
+                    "display_name_en",
+                    "unit",
+                    "description",
+                    "comparison_key",
+                    "aggregation",
+                    "definition",
+                    "category",
+                    "semantic_group",
+                    "suggested_view",
+                ):
                     if option in entry and not isinstance(entry[option], str):
                         raise InvalidRunDirectoryError(
                             f"metric_definitions[{metric_key}].{option} 必须是字符串"
+                        )
+                for option in ("default_visibility", "is_primary"):
+                    if option in entry and not isinstance(entry[option], bool):
+                        raise InvalidRunDirectoryError(
+                            f"metric_definitions[{metric_key}].{option} 必须是布尔值"
                         )
         normalized = dict(data)
         normalized["created_at"] = created_at

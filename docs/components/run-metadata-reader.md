@@ -32,7 +32,7 @@
 1. 确认 `run.json` 是普通文件，不是符号链接。
 2. 以 UTF-8 读取 JSON，拒绝 `NaN`/`Infinity`。
 3. 拒绝未知顶层字段；第三方数据必须放在 `extensions`。
-4. 校验必需字段：`schema_version="1.0"`、`run_id`、`project`、`name`、带时区的 `created_at`。
+4. 校验必需字段：`schema_version="1.0" 或 "1.1"`、`run_id`、`project`、`name`、带时区的 `created_at`。
 5. 校验可选结构：`model`/`dataset` 为对象、`tags` 为无重复字符串数组、`config`/`source`/`extensions` 为对象。
 6. 逐项校验 `metric_definitions`：键为 `phase/metric_name`，`direction` 必须是 `min`/`max`/`none`，其它允许字段为字符串，未知字段拒绝。
 7. 把 `created_at` 规范化为 UTC；其它字段保持原值，供界面和对比使用。
@@ -61,4 +61,4 @@
 ## 名称解释
 
 - `metric_definitions`：指标定义表，键为 `phase/metric_name`，`direction` 决定最佳值方向。
-- `schema_version`：日志协议版本，当前固定 `1.0`。
+- `schema_version`：日志协议版本，支持 `1.0`（历史）和 `1.1`（四要素）。

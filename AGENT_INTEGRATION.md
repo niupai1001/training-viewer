@@ -1,13 +1,13 @@
-# 给训练 Agent 的接入契约：Training Viewer / TVLP 1.0
+# 给训练 Agent 的接入契约：Training Viewer / TVLP 1.0 与 1.1
 
-> **把本文件完整交给训练 Agent。** 目标是：Agent 修改训练程序，让它按 Training Viewer Log Protocol（TVLP，训练日志协议）1.0 写出日志，然后运行一条 `training-viewer attach` 命令把日志目录挂到本机查看器，最后把可打开的 URL 交给用户。用户不需要手动打开服务、不需要手动找日志文件。
+> **把本文件完整交给训练 Agent。** 目标是：Agent 修改训练程序，让它按 Training Viewer Log Protocol（TVLP，训练日志协议）1.1 写出日志（历史项目可继续 1.0），然后运行一条 `training-viewer attach` 命令把日志目录挂到本机查看器，最后把可打开的 URL 交给用户。用户不需要手动打开服务、不需要手动找日志文件。
 
 ## 0. 先判断：已有日志还是新实验
 
 - **已有日志**（TensorBoard、CSV/TSV/JSONL、普通 `train.log`/`train.txt`）：不要为了“接入”重写训练代码。直接运行 `training-viewer open <日志根目录>`，或在查看器首页/设置页添加目录。查看器会做内容嗅探，零改造导入。
 - **新实验**，或需要“运行中”心跳证明、断点续训会话、统一产物路径：按本契约接入 `TrainingRunWriter`，再 `attach`。这是增强模式，不是查看已有日志的前置条件。
 
-本契约以下内容只适用于第二种模式。无论哪种模式，TVLP 字段仍固定为 1.0。
+本契约以下内容只适用于第二种模式。新接入优先使用 TVLP 1.1 四要素描述；已有 1.0 项目不需要迁移。
 
 ## 0.1 你必须交付的结果
 
@@ -27,7 +27,7 @@
 
 ## 1. 不可违反的边界
 
-- 日志协议固定为 **TVLP 1.0**；不要改字段名、不要发明“简化版”。
+- 新实验优先使用 **TVLP 1.1**；已有日志兼容 1.0。不要改字段名、不要发明“简化版”。
 - 原始训练日志只追加，不就地修改历史行；不要删除已有实验目录。
 - 不伪造指标：没有记录的验证指标就不要写；不能把缺失值填成 0。
 - 不把训练代码变成查看器 HTTP 客户端；训练只写文件，查看器只读文件。
@@ -42,7 +42,7 @@
 必读：
 
 - [`docs/log-sources.md`](docs/log-sources.md)：TVLP 目录、必需字段、半行、会话、状态。
-- [`schemas/run.schema.json`](schemas/run.schema.json)、[`schemas/metrics.schema.json`](schemas/metrics.schema.json)、[`schemas/events.schema.json`](schemas/events.schema.json)。
+- [`schemas/run-1.1.schema.json`](schemas/run-1.1.schema.json)（1.1）、[`schemas/run.schema.json`](schemas/run.schema.json)（1.0）、[`schemas/metrics.schema.json`](schemas/metrics.schema.json)、[`schemas/events.schema.json`](schemas/events.schema.json)。
 
 每个 Run 目录至少：
 
@@ -53,6 +53,34 @@
   events.jsonl      # 推荐：生命周期、心跳、产物引用
   artifacts/        # 可选：预测图/标签图/表格
 ```
+
+## 2.1 TVLP 1.1 新实验四要素（必须）
+
+新实验使用 `schema_version: "1.1"`，并在 `run.json` 写：
+
+```json
+"experiment_description": {
+  "data_description": "数据源、波段/分辨率/版本/划分",
+  "model_architecture": "模型家族/骨干/关键结构",
+  "modification_plan": "相对基线真正改了什么；基线写原始基线，无结构改动",
+  "research_objective": "本次训练要验证的科学或工程假设",
+  "change_details": "可选：组件级变化"
+}
+```
+
+四项都不能为空；禁止用 `obs`、`run1`、`V3` 或空串代替。`name` 应是包含数据/模型/改动/目标的简短摘要；完整四段始终保留。Writer 示例：
+
+```python
+TrainingRunWriter(
+    log_root=log_root,
+    project="disaster-detection",
+    name="Sentinel-2十波段｜SegFormer-B2｜波长条件化｜验证分割性能",
+    schema_version="1.1",
+    experiment_description={...},
+)
+```
+
+历史 1.0 日志不需要补写；Viewer 继续读取，缺失字段显示“未提供”。
 
 ## 3. 选择日志根目录
 
@@ -283,7 +311,7 @@ training-viewer stop --json
 
 ## 11. 验收清单
 
-- [ ] `run.json` 存在，`schema_version` 为 `"1.0"`，`run_id` 全局唯一。
+- [ ] `run.json` 存在，`schema_version` 为 `"1.1"`（新实验）或 `"1.0"`（历史兼容），`run_id` 全局唯一。
 - [ ] `metrics.jsonl` 至少一条记录；每条有 `timestamp`、`phase`、`metrics` 和 Step 或 Epoch。
 - [ ] 没有 `NaN`、`Infinity`、布尔指标、绝对产物路径。
 - [ ] 同一个 Step 的 train/val 是不同 `phase` 的两条记录。

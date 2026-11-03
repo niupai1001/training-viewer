@@ -92,6 +92,8 @@ class TrainingRunWriter:
         source: dict | None = None,
         tags: list[str] | None = None,
         metric_definitions: dict | None = None,
+        experiment_description: dict | None = None,
+        schema_version: str = "1.0",
         session_id: str | None = None,
         heartbeat_interval_seconds: float | None = 0.0,
         resume: bool = False,
@@ -100,6 +102,22 @@ class TrainingRunWriter:
             raise ValueError("project 不能为空")
         if not name or not str(name).strip():
             raise ValueError("name 不能为空")
+        if schema_version not in ("1.0", "1.1"):
+            raise ValueError("schema_version 必须是 1.0 或 1.1")
+        if schema_version == "1.1":
+            if not isinstance(experiment_description, dict):
+                raise ValueError("TVLP 1.1 必须提供 experiment_description 四要素")
+            for field in (
+                "data_description",
+                "model_architecture",
+                "modification_plan",
+                "research_objective",
+            ):
+                value = experiment_description.get(field)
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(f"experiment_description.{field} 不能为空")
+        elif experiment_description is not None:
+            raise ValueError("TVLP 1.0 不使用 experiment_description，请同时设置 schema_version=1.1")
         if log_root is None and run_directory is None:
             raise ValueError("必须提供 log_root 或 run_directory")
         self.project = str(project)
@@ -113,6 +131,8 @@ class TrainingRunWriter:
         self.source = source or {}
         self.tags = tags or []
         self.metric_definitions = _normalize_metric_definitions(metric_definitions or {})
+        self.experiment_description = experiment_description
+        self.schema_version = schema_version
         self.session_id = session_id or (
             f"session-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:6]}"
         )
@@ -381,7 +401,7 @@ class TrainingRunWriter:
     # ------------------------------------------------------------------ 内部
     def _build_metadata(self) -> dict:
         metadata = {
-            "schema_version": _SCHEMA_VERSION,
+            "schema_version": self.schema_version,
             "run_id": self.run_id,
             "project": self.project,
             "name": self.name,
@@ -398,6 +418,7 @@ class TrainingRunWriter:
         for key, value in (
             ("experiment", self.experiment),
             ("task", self.task),
+            ("experiment_description", self.experiment_description),
             ("model", self.model),
             ("dataset", self.dataset),
         ):

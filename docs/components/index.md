@@ -14,6 +14,7 @@
 | 训练指标索引器 | `TrainingMetricIndexer` | `indexing/training_metric_indexer.py` | 增量写入 SQLite、维护游标、去重、推导状态 |
 | 索引查询 | `IndexQueries` | `indexing/index_queries.py` | 提供运行、曲线、指标目录、对比、产物、诊断查询 |
 | 指标语义解析器 | `resolve_metric_semantics` | `metrics/metric_semantics.py` | 声明/别名/未知分流，不猜测科学含义 |
+| 运行监控摘要 | `get_monitoring_summary` | `indexing/index_queries.py` | KPI 与生命周期/日志跨度统一摘要 |
 | 日志更新监听器 | `LogUpdateWatcher` | `watch/log_update_watcher.py` | 轮询 + 文件事件触发同步 |
 | 查看器应用服务 | `TrainingViewerService` | `service.py` | 协调扫描/索引/状态/SSE/根目录 |
 | 路径安全守卫 | `path_guard` | `security/path_guard.py` | 拒绝绝对路径、穿越和越界符号链接 |
@@ -52,6 +53,7 @@
 - [训练指标索引器](training-metric-indexer.md)
 - [索引查询](index-queries.md)
 - [指标目录与语义分流](metric-catalog.md)
+- [运行监控摘要](run-monitoring-summary.md)
 - [指标浏览器](metric-browser.md)
 - [训练概览](training-overview.md)
 - [日志更新监听器](log-update-watcher.md)

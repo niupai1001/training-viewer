@@ -7,6 +7,7 @@ import type {
   MetricCatalogItem,
   MetricQueryResult,
   RunDetail,
+  RunMonitoringSummary,
   SeriesPayload,
 } from "../types";
 import { formatDuration, formatMetricValue, formatNumber, unitLabel } from "../utils/format";
@@ -77,6 +78,7 @@ export function TrainingOverview({ run }: { run: RunDetail }) {
     () => api.metricCatalog(run.run_id, { limit: 100 }),
     [run.run_id, liveVersion],
   );
+  const summaryState = useApi(() => api.runSummary(run.run_id), [run.run_id, liveVersion]);
   const catalog = catalogState.data?.items ?? [];
   const core = useMemo(() => {
     const trainLoss = catalog.find((item) => item.role === "train_loss");
@@ -192,7 +194,19 @@ export function TrainingOverview({ run }: { run: RunDetail }) {
         </button>
       </div>
 
-      <SummaryGrid run={run} core={core} series={coreSeries} />
+      {run.metadata?.experiment_description ? (
+        <details className="experiment-description">
+          <summary>实验说明：数据、架构、改动、目标</summary>
+          <dl>
+            <dt>数据</dt><dd>{run.metadata.experiment_description.data_description}</dd>
+            <dt>模型架构</dt><dd>{run.metadata.experiment_description.model_architecture}</dd>
+            <dt>改动方案</dt><dd>{run.metadata.experiment_description.modification_plan}</dd>
+            <dt>研究目标</dt><dd>{run.metadata.experiment_description.research_objective}</dd>
+          </dl>
+        </details>
+      ) : null}
+
+      <SummaryGrid run={run} core={core} series={coreSeries} summary={summaryState.data} />
       {catalogState.loading && !catalogState.data ? <LoadingBlock label="正在读取指标目录…" /> : null}
       {catalogState.error ? <ErrorBlock error={catalogState.error} onRetry={catalogState.reload} /> : null}
       {coreState.error ? <ErrorBlock error={coreState.error} onRetry={coreState.reload} /> : null}
@@ -296,47 +310,71 @@ function SummaryGrid({
   run,
   core,
   series,
+  summary,
 }: {
   run: RunDetail;
   core: { trainLoss?: MetricCatalogItem; valLoss?: MetricCatalogItem; primary?: MetricCatalogItem; learningRate?: MetricCatalogItem };
   series: Map<string, SeriesPayload>;
+  summary?: RunMonitoringSummary | null;
 }) {
   const train = core.trainLoss ? series.get(core.trainLoss.raw_key) : undefined;
   const val = core.valLoss ? series.get(core.valLoss.raw_key) : undefined;
   const primary = core.primary ? series.get(core.primary.raw_key) : undefined;
   const lr = core.learningRate ? series.get(core.learningRate.raw_key) : undefined;
-  const lastPoint = primary?.last ?? val?.last ?? train?.last;
-  const span = run.duration_seconds;
+  const fallbackLast = [train?.last, val?.last, primary?.last, lr?.last]
+    .filter((point): point is NonNullable<SeriesPayload["last"]> => Boolean(point))
+    .sort((a, b) => (Date.parse(b.timestamp ?? "") || 0) - (Date.parse(a.timestamp ?? "") || 0))[0];
+  const currentEpoch = summary?.current_epoch ?? fallbackLast?.epoch ?? null;
+  const currentStep = summary?.current_global_step ?? fallbackLast?.global_step ?? null;
+  const timing = summary?.timing;
+  const activeSeconds = timing?.active_training_seconds ?? null;
+  const wallSeconds = timing?.wall_span_seconds ?? run.duration_seconds;
+  const timeValue =
+    activeSeconds != null
+      ? formatDuration(activeSeconds)
+      : wallSeconds != null
+        ? formatDuration(wallSeconds)
+        : "未记录";
+  const timeLabel = activeSeconds != null ? "累计运行时长" : "日志跨度";
+  const timeNote =
+    activeSeconds != null
+      ? `日志跨度 ${wallSeconds != null ? formatDuration(wallSeconds) : "未记录"}；${timing?.quality ?? ""}`
+      : "指标首末；不是有效训练时长";
+  const trainValue = summary?.train_loss?.latest ?? train?.last;
+  const valValue = summary?.val_loss?.latest ?? val?.last;
+  const primaryMetric = summary?.primary_validation_metric;
+  const primaryBest = primaryMetric?.best ?? primary?.best;
+  const lrValue = summary?.learning_rate?.latest ?? lr?.last;
   return (
     <div className="summary-grid">
       <div className="summary-card">
-        <span className="summary-label">日志跨度</span>
-        <strong>{span != null ? formatDuration(span) : "未记录"}</strong>
-        <span className="muted small">指标首末；不是有效训练时长</span>
+        <span className="summary-label">{timeLabel}</span>
+        <strong>{timeValue}</strong>
+        <span className="muted small">{timeNote}</span>
       </div>
       <div className="summary-card">
         <span className="summary-label">Epoch / Step</span>
-        <strong>{lastPoint?.epoch != null ? `E${lastPoint.epoch}` : "—"} / {lastPoint?.global_step != null ? `S${lastPoint.global_step}` : "—"}</strong>
-        <span className="muted small">来自当前核心曲线最后一点</span>
+        <strong>{currentEpoch != null ? `E${currentEpoch}` : "—"} / {currentStep != null ? `S${currentStep}` : "—"}</strong>
+        <span className="muted small">计划 {summary?.planned_epochs ?? "未记录"}</span>
       </div>
       <div className="summary-card">
         <span className="summary-label">Train Loss</span>
-        <strong>{train?.last ? formatMetricValue(train.last.value, train.unit) : "未记录"}</strong>
+        <strong>{trainValue ? formatMetricValue(trainValue.value, summary?.train_loss?.unit ?? train?.unit) : "未记录"}</strong>
         <span className="muted small">最新训练损失</span>
       </div>
       <div className="summary-card">
         <span className="summary-label">Validation Loss</span>
-        <strong>{val?.last ? formatMetricValue(val.last.value, val.unit) : "未记录"}</strong>
-        <span className="muted small">不以 Test Loss 顶替</span>
+        <strong>{valValue ? formatMetricValue(valValue.value, summary?.val_loss?.unit ?? val?.unit) : "未记录"}</strong>
+        <span className="muted small">{valValue?.global_step != null ? `最近验证：S${valValue.global_step}` : "尚无验证记录"}</span>
       </div>
       <div className="summary-card">
         <span className="summary-label">最佳验证指标</span>
-        <strong>{primary?.best ? formatMetricValue(primary.best.value, primary.unit) : "未记录"}</strong>
-        <span className="muted small">{core.primary?.display_name_zh ?? "未定义/未记录"}</span>
+        <strong>{primaryBest ? formatMetricValue(primaryBest.value, primaryMetric?.unit ?? primary?.unit) : "未记录"}</strong>
+        <span className="muted small">{primaryMetric?.display_name ?? core.primary?.display_name_zh ?? (core.valLoss ? "最佳验证损失（越低越好）" : "未定义/未记录")}</span>
       </div>
       <div className="summary-card">
         <span className="summary-label">Learning Rate</span>
-        <strong>{lr?.last ? formatMetricValue(lr.last.value) : "未记录"}</strong>
+        <strong>{lrValue ? formatMetricValue(lrValue.value) : "未记录"}</strong>
         <span className="muted small">最近记录；多参数组未合并</span>
       </div>
     </div>

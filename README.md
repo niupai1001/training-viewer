@@ -32,7 +32,7 @@ training-viewer open D:\experiments\projectA
 如果希望查看器能证明“训练进程仍在运行”、记录断点续训会话、统一产物路径，把 [`AGENT_INTEGRATION.md`](AGENT_INTEGRATION.md) 完整交给训练 Agent，它应当：
 
 1. 在训练代码中调用 `TrainingRunWriter`（只依赖 Python 标准库，可用 `pip install training-viewer` 或直接复制 `src/training_viewer/writer.py`）；
-2. 按 TVLP 1.0 生成 `run.json`、`metrics.jsonl`、`events.jsonl` 和 `artifacts/`；
+2. 按 TVLP 1.1（或兼容 1.0）生成 `run.json`、`metrics.jsonl`、`events.jsonl` 和 `artifacts/`；
 3. **在训练开始前**运行 `training-viewer attach <日志根目录> --json`，在后台启动并挂载查看器，训练过程中曲线会自动刷新；
 4. 训练结束后运行 `training-viewer validate <run目录>`，确认 0 error；
 5. 把返回的 `url` 交给你。
@@ -55,7 +55,7 @@ training-viewer attach D:\runs\my-project --json
 
 ```text
 请完整阅读并遵守 AGENT_INTEGRATION.md：在当前训练项目中加入 TrainingRunWriter，
-按 TVLP 1.0 写出真实指标与产物，运行 training-viewer validate 确认 0 error，
+按 TVLP 1.1/1.0 写出真实指标与产物，运行 training-viewer validate 确认 0 error，
 再运行 training-viewer attach <日志根目录> --json，把返回的 url 交给我。
 ```
 
@@ -174,7 +174,7 @@ training-viewer --version
 - `status` / `stop`：检查或停止通过 `attach`/`serve` 启动的本机实例。
 - `open`：人工打开时使用；探测并复用同一数据目录下已运行的实例，否则启动服务并打开浏览器。
 - `serve`：只启动服务，不自动打开浏览器。
-- `validate`：按 TVLP 1.0 的 JSON Schema 校验一个 Run 目录，并额外检查产物路径和文件存在性；错误时退出码为 1。- `--data-dir`：索引与界面数据目录；默认 Windows 为 `%LOCALAPPDATA%\TrainingViewer`，其它系统为 `~/.training_viewer`，也可用环境变量 `TRAINING_VIEWER_DATA_DIR` 指定。
+- `validate`：按 TVLP 1.0/1.1 的 JSON Schema 校验一个 Run 目录，并额外检查产物路径和文件存在性；错误时退出码为 1。- `--data-dir`：索引与界面数据目录；默认 Windows 为 `%LOCALAPPDATA%\TrainingViewer`，其它系统为 `~/.training_viewer`，也可用环境变量 `TRAINING_VIEWER_DATA_DIR` 指定。
 - 端口被占用时自动尝试后续端口。
 
 示例：
@@ -203,7 +203,7 @@ code --install-extension vscode-extension\training-viewer-vscode-1.0.0.vsix
 
 ## 支持的日志来源
 
-### 1. 标准训练日志（TVLP 1.0）
+### 1. 标准训练日志（TVLP 1.0 / 1.1）
 
 目录中必须有 `run.json`，可选 `metrics.jsonl`、`events.jsonl`、`metrics.csv`、`artifacts/`、`logs/`。完整字段说明见 [`docs/log-sources.md`](docs/log-sources.md) 与 [`schemas/`](schemas/)。
 
@@ -286,7 +286,7 @@ npm run build
 
 测试覆盖：完整行/半行/坏行、截断重建、重复导入、断点续训、状态/活动分离、同 Step 多阶段、自动横轴、CSV 映射、TensorBoard 标量、任意 CSV/TSV/JSONL/文本、run_id 冲突、目录移动、增量扫描、降采样与原始 Best/Last、产物路径穿越、Host/Origin 校验、导出、CLI 校验、训练写入器与恢复会话。后端当前结果见下方命令输出，不在正文重复写死数字。
 
-前端另有 3 个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 在 1440×900 与 1366×768 覆盖默认概览、指标抽屉/搜索/添加图表、项目筛选、缩放区间和设置页；`npm run e2e:live` 验证 imported JSONL 持续追加后曲线自动刷新。当前结果：**98 通过，2 跳过**。百万点、MLflow 原型与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
+前端另有 3 个 Vitest 组件测试，`npm run e2e` 用真实 Chrome 在 1440×900 与 1366×768 覆盖默认概览、指标抽屉/搜索/添加图表、项目筛选、缩放区间和设置页；`npm run e2e:live` 验证 imported JSONL 持续追加后曲线自动刷新。当前结果：**104 通过，2 跳过**。百万点、MLflow 原型与 TensorBoard 基准见 [`docs/performance.md`](docs/performance.md)。
 
 ## 已知限制
 
@@ -310,7 +310,7 @@ npm run build
 - 训练环境与查看器环境默认分离：`attach` 在查看器所在机器执行；跨机器场景只完成日志写入，由本机挂载或 SSH 隧道访问。
 - 指标目录已区分连续曲线与单次评估，并提供服务端搜索/分页；用户自定义指标定义、10,000 指标虚拟化和单点热力图尚未实现。
 - 自定义图表保存在浏览器本地用户状态（按 Run id），不是 `user_state.sqlite3`；换浏览器/清站点数据会丢失。
-- TVLP 1.1 的四要素描述、Schema 与 Writer/Validator 升级尚未完成；当前仍读取 TVLP 1.0，历史日志缺失字段显示“未提供”。
+- TVLP 1.1 已支持四要素 Schema、Writer 和校验器；Writer 默认仍输出 1.0，新接入应显式使用 `schema_version="1.1"`。历史 1.0 继续读取，缺字段显示“未提供”。
 
 性能上，曲线查询在 SQLite 内做最小-最大/首尾分桶并使用物化桶，Best/Last 始终基于全量原始记录。10 万点以内交互可用；100 万点索引约 44 秒、首次查询约 3.1 秒、索引库约 1.66 GB；运行详情与工作区对比都支持缩放区间重查（见 [`docs/performance.md`](docs/performance.md)）。
 

@@ -154,8 +154,21 @@ def validate_run_directory(run_directory: Path, schema_directory: Path) -> Valid
             ValidationMessage("error", "", 0, f"目录不存在：{run_directory}")
         )
         return report
+    run_file = run_directory / "run.json"
+    run_schema = "run.schema.json"
+    if run_file.is_file():
+        try:
+            version = _load_json(run_file).get("schema_version")
+        except (OSError, ValueError, AttributeError):
+            version = None
+        if version == "1.1":
+            run_schema = "run-1.1.schema.json"
+        elif version not in (None, "1.0"):
+            report.messages.append(
+                ValidationMessage("error", "run.json", 0, f"不支持的 schema_version：{version!r}")
+            )
     schema_files = [
-        ("run.json", "run.schema.json", "run", False),
+        ("run.json", run_schema, "run", False),
         ("metrics.jsonl", "metrics.schema.json", "metrics", False),
         ("events.jsonl", "events.schema.json", "events", True),
     ]

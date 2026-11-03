@@ -20,6 +20,8 @@
 | P1-09 上次 Run | **完成** | 浏览器本地记住主动选择；示例 Run 不优先抢占真实运行 |
 | P2-10 缓存/用户状态混用 | **完成** | `index.sqlite3` 可重建；`user_state.sqlite3` 保存根目录/备注/收藏/视图；删索引测试通过 |
 | C10/A16–A24 指标目录与分流 | **Partial** | 指标语义/目录 API、抽屉搜索分页、单点评估表、自定义图表；1000 指标 40 项/46 KB/31 ms；10k 与用户指标定义未完成 |
+| C2 RunMonitoringSummary | **完成（首版）** | `/summary` 分离生命周期累计时长与指标跨度；六项 KPI 接后端；A06/A07 测试 |
+| C5 TVLP 1.1 四要素 | **完成（首版）** | 独立 1.1 Schema、四段必填、Writer 显式 opt-in、Validator 分流；1.0 兼容 |
 
 ## 2. 架构与界面
 
@@ -48,7 +50,7 @@ python tools/cuda_writer_smoke.py
 
 当前本机结果：
 
-- `98 passed, 2 skipped`
+- `104 passed, 2 skipped`
 - 前端 3 个 Vitest 通过
 - E2E 通过（真实 Chrome，含滚轮缩放/重置）
 - 1M：索引 44.4 s，首次查询 3.14 s，库 1.66 GB

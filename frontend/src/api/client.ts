@@ -10,6 +10,7 @@ import type {
   MetricQueryResult,
   MetricCatalogResponse,
   MetricKey,
+  RunMonitoringSummary,
   ProjectTree,
   ResultCandidate,
   RootDirectory,
@@ -134,6 +135,8 @@ export const api = {
     request<MetricCatalogResponse>(
       `/runs/${encodeURIComponent(runId)}/metric-catalog${queryString(params)}`,
     ),
+  runSummary: (runId: string) =>
+    request<RunMonitoringSummary>(`/runs/${encodeURIComponent(runId)}/summary`),
   metrics: (
     runId: string,
     series: string[],

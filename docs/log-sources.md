@@ -1,8 +1,8 @@
 # 日志来源与协议说明
 
-查看器支持三种本机日志来源。识别优先级固定为：**标准训练日志（TVLP 1.0） > TensorBoard 事件文件 > CSV 指标表**。目录中只要存在有效的 `run.json`，就按标准协议解释，不会把其中的 CSV 或事件文件当成第二个运行。
+查看器支持三种本机日志来源。识别优先级固定为：**标准训练日志（TVLP 1.0/1.1） > TensorBoard 事件文件 > CSV 指标表**。目录中只要存在有效的 `run.json`，就按标准协议解释，不会把其中的 CSV 或事件文件当成第二个运行。
 
-## 1. 标准训练日志（TVLP 1.0）
+## 1. 标准训练日志（TVLP 1.0 / 1.1）
 
 ### 1.1 目录结构
 
@@ -22,14 +22,15 @@ experiments/
 
 ### 1.2 run.json
 
-必需字段：`schema_version`（固定 `"1.0"`）、`run_id`、`project`、`name`、`created_at`（带时区）。可选字段：`experiment`、`task`、`model`、`dataset`、`config`、`source`、`tags`、`metric_definitions`、`extensions`。
+必需字段：`schema_version`（`"1.0"` 或 `"1.1"`）、`run_id`、`project`、`name`、`created_at`（带时区）。可选字段：`experiment`、`task`、`model`、`dataset`、`config`、`source`、`tags`、`metric_definitions`、`metric_groups`（1.1）、`extensions`。
 
+- TVLP 1.1 额外要求 `experiment_description` 的 `data_description`、`model_architecture`、`modification_plan`、`research_objective` 四个非空字符串；`change_details` 可选。
 - 读取器拒绝未知顶层字段；第三方信息应放在 `extensions`。
 - `created_at` 会统一转换为 UTC。
-- `metric_definitions` 的键为 `phase/metric_name`，至少包含 `direction`（`min` / `max` / `none`）；`unit`、`aggregation`、`definition`、`comparison_key` 用于界面提示与可比性判断。
+- `metric_definitions` 的键为 `phase/metric_name`；1.0 要求 `direction`（`min`/`max`/`none`），1.1 可省略（视为 `none`）。1.1 可增加 `category`、`semantic_group`、`suggested_view`、`default_visibility`、`is_primary`、`display_name_en`。
 - 训练运行状态来自 `events.jsonl`，不要求反复改写 `run.json`。查看器读取时支持临时文件 + 原子替换。
 
-字段级约束以 [`schemas/run.schema.json`](../schemas/run.schema.json) 为准。
+字段级约束：1.0 用 [`schemas/run.schema.json`](../schemas/run.schema.json)，1.1 用 [`schemas/run-1.1.schema.json`](../schemas/run-1.1.schema.json)。
 
 ### 1.3 metrics.jsonl
 

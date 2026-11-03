@@ -87,7 +87,8 @@
 
 - `tests/test_writer.py`：完整 Run、原子元数据、产物、恢复会话、异常失败、非法输入、拒绝无 resume 覆盖。
 - 手工：运行 `AGENT_INTEGRATION.md` 的示例训练片段，执行 `training-viewer validate <run目录>`，再 `training-viewer attach <log_root> --json`，确认运行状态为 completed 且曲线有点。
-- 写入器生成的 `run.json` 应被 `schemas/run.schema.json` 接受。
+- 写入器生成的 `run.json` 应被对应版本的 `schemas/run.schema.json`（1.0）或 `schemas/run-1.1.schema.json`（1.1）接受。
+- `schema_version="1.1"` 时必须提供 `experiment_description` 四段非空说明；默认仍为 1.0，避免旧调用方被静默改变协议。
 
 ## 已知限制与回退
 

@@ -6,7 +6,7 @@
 
 Training Viewer 是本机日志消费者，不是训练调度器：
 
-- 训练程序按 Training Viewer Log Protocol（TVLP，训练日志协议）1.0 输出文件即可；不需要安装 SDK、不需要联网，也不需要启动查看器。
+- 训练程序按 Training Viewer Log Protocol（TVLP，训练日志协议）1.0/1.1 输出文件即可；不需要安装 SDK、不需要联网，也不需要启动查看器。
 - 查看器对用户添加的目录**只读**。索引数据库、备注、保存的对比视图位于应用数据目录。
 - 删除索引数据库不会删除或损坏原始实验；重新扫描可以从日志重建全部指标、事件与产物引用。
 - 远程接入、鉴权、多用户、训练调度、在线改超参数不在 V1 范围。
@@ -220,7 +220,7 @@ training_viewer_v1/
   README.md
   AGENT_INTEGRATION.md          # 交给训练 Agent 的接入契约
   pyproject.toml
-  schemas/                       # TVLP 1.0 官方 JSON Schema（仓库源）
+  schemas/                       # TVLP 1.0/1.1 官方 JSON Schema（仓库源）
   examples/                      # 4 个示例运行
   tools/validate_log.py          # 原有独立校验工具
   src/training_viewer/

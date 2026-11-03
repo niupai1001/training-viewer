@@ -2,7 +2,7 @@
 
 ## 一句话说明
 
-按 TVLP 1.0 的 JSON Schema 校验一个 Run 目录，并额外检查产物路径安全与文件存在性；只读，不写索引，也不修改训练目录。
+按 TVLP 1.0/1.1 的 JSON Schema 校验一个 Run 目录，并额外检查产物路径安全与文件存在性；只读，不写索引，也不修改训练目录。
 
 ## 基本信息
 
@@ -31,7 +31,7 @@
 ## 主要处理流程
 
 1. 检查目录存在。
-2. 加载 `run.schema.json`、`metrics.schema.json`、`events.schema.json`（Draft 2020-12 + 格式检查）。
+2. 读取 `run.json` 的 `schema_version`，选择 `run.schema.json` 或 `run-1.1.schema.json`，再加载 `metrics.schema.json`、`events.schema.json`（Draft 2020-12 + 格式检查）。
 3. `run.json`：必需，整文件校验。
 4. `metrics.jsonl` / `events.jsonl`：只校验以换行结尾的完整行；末尾半行给出 info，不判为错误。
 5. 拒绝 `NaN`/`Infinity`；指标值再次检查有限性。

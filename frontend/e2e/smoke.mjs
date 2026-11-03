@@ -50,7 +50,7 @@ async function assertViewport(width, height, suffix) {
 
   await page.getByRole("button", { name: /添加图表/ }).click();
   await page.getByRole("dialog", { name: "添加图表或指标" }).waitFor();
-  await page.getByRole("searchbox", { name: "搜索指标" }).fill("accuracy");
+  await page.getByRole("searchbox", { name: "搜索指标" }).fill("loss");
   await page.locator(".metric-row").first().waitFor({ timeout: 10000 });
   await page.locator(".metric-row input[type=checkbox]").first().check();
   await page.getByRole("button", { name: "添加为新图" }).click();
