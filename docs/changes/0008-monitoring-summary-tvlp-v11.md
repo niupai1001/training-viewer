@@ -41,7 +41,7 @@ npm run build
 npm run e2e
 ```
 
-本机：后端 104 passed, 2 skipped；前端 3 Vitest；E2E 通过。
+本机：后端 104 passed, 2 skipped；前端 4 Vitest；E2E 通过。
 
 ## 未完成
 

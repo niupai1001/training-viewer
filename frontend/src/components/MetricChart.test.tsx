@@ -32,7 +32,7 @@ const point: SeriesPoint = {
   session_id: "s1",
 };
 
-function renderChart(points: SeriesPoint[]) {
+function renderChart(points: SeriesPoint[], extra: { yMin?: number; yMax?: number } = {}) {
   return render(
     <MetricChart
       title="val/loss"
@@ -42,6 +42,7 @@ function renderChart(points: SeriesPoint[]) {
       smoothingWindow={5}
       logScale={false}
       showRaw={false}
+      {...extra}
     />,
   );
 }
@@ -52,6 +53,15 @@ describe("MetricChart lifecycle", () => {
     chartMock.dispose.mockClear();
     chartMock.on.mockClear();
     chartMock.off.mockClear();
+  });
+
+  it("applies explicit Y bounds for custom focus", () => {
+    renderChart([point], { yMin: 0.2, yMax: 0.8 });
+    const lastOption = chartMock.setOption.mock.calls.at(-1)?.[0] as {
+      yAxis?: { min?: number; max?: number };
+    };
+    expect(lastOption.yAxis?.min).toBe(0.2);
+    expect(lastOption.yAxis?.max).toBe(0.8);
   });
 
   it("keeps the chart container mounted when data is empty and later receives points", () => {

@@ -51,7 +51,7 @@ python tools/cuda_writer_smoke.py
 当前本机结果：
 
 - `104 passed, 2 skipped`
-- 前端 3 个 Vitest 通过
+- 前端 4 个 Vitest 通过
 - E2E 通过（真实 Chrome，含滚轮缩放/重置）
 - 1M：索引 44.4 s，首次查询 3.14 s，库 1.66 GB
 - 来源清单示例：7 个来源、4 个逻辑实验

@@ -2533,6 +2533,24 @@ textarea {
   margin: 0;
 }
 
+.loss-y-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -2px 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.loss-y-controls input {
+  width: 72px;
+  margin-left: 4px;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 11px;
+}
+
 .chart-mode-switch {
   display: inline-flex;
   gap: 2px;

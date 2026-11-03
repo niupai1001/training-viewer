@@ -42,6 +42,8 @@ interface MetricChartProps {
   smoothingWindow: number;
   logScale: boolean;
   showRaw: boolean;
+  yMin?: number | null;
+  yMax?: number | null;
   height?: number;
   group?: string;
   emptyMessage?: string;
@@ -64,6 +66,8 @@ export function MetricChart({
   smoothingWindow,
   logScale,
   showRaw,
+  yMin,
+  yMax,
   height = 380,
   group,
   emptyMessage = "当前没有可绘制的数据点。",
@@ -77,8 +81,8 @@ export function MetricChart({
   rangeCallbackRef.current = onRangeChange;
 
   const built = useMemo(
-    () => buildChartOption({ lines, axis, smoothing, smoothingWindow, logScale, showRaw }),
-    [lines, axis, smoothing, smoothingWindow, logScale, showRaw],
+    () => buildChartOption({ lines, axis, smoothing, smoothingWindow, logScale, showRaw, yMin, yMax }),
+    [lines, axis, smoothing, smoothingWindow, logScale, showRaw, yMin, yMax],
   );
 
   useEffect(() => {
@@ -254,6 +258,8 @@ function buildChartOption({
   smoothingWindow,
   logScale,
   showRaw,
+  yMin,
+  yMax,
 }: {
   lines: ChartLine[];
   axis: Axis;
@@ -261,6 +267,8 @@ function buildChartOption({
   smoothingWindow: number;
   logScale: boolean;
   showRaw: boolean;
+  yMin?: number | null;
+  yMax?: number | null;
 }): {
   option: EChartsCoreOption;
   mainSeriesCount: number;
@@ -318,7 +326,8 @@ function buildChartOption({
       series.push({
         name: mainName,
         type: "line",
-        showSymbol: false,
+        showSymbol: segment.points.length <= 2,
+        symbolSize: 7,
         animation: false,
         connectNulls: false,
         data: smoothed.map((point) => ({ value: [point.x, point.value], meta: point })),
@@ -412,6 +421,8 @@ function buildChartOption({
     },
     yAxis: {
       type: logScaleApplied ? "log" : "value",
+      min: yMin ?? undefined,
+      max: yMax ?? undefined,
       name: singleUnit ? unitLabel(singleUnit) : undefined,
       nameLocation: "end",
       nameGap: 12,

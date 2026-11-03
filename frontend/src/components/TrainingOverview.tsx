@@ -36,10 +36,17 @@ export function TrainingOverview({ run }: { run: RunDetail }) {
   const [viewsLoaded, setViewsLoaded] = useState(false);
   const [range, setRange] = useState<{ min: number; max: number } | null>(null);
   const [lossMode, setLossMode] = useState<"full" | "late" | "log">("full");
+  const [yMinText, setYMinText] = useState("");
+  const [yMaxText, setYMaxText] = useState("");
+  const yMin = yMinText.trim() && Number.isFinite(Number(yMinText)) ? Number(yMinText) : null;
+  const yMax = yMaxText.trim() && Number.isFinite(Number(yMaxText)) ? Number(yMaxText) : null;
+  const yRangeInvalid = yMin != null && yMax != null && yMin >= yMax;
 
   useEffect(() => {
     setRange(null);
     setLossMode("full");
+    setYMinText("");
+    setYMaxText("");
   }, [run.run_id]);
 
   function updateRange(next: { min: number; max: number } | null) {
@@ -218,7 +225,21 @@ export function TrainingOverview({ run }: { run: RunDetail }) {
         </p>
       ) : null}
       <div className="overview-charts">
-        <CoreLossPanel train={core.trainLoss} val={core.valLoss} series={coreSeries} onRangeChange={updateRange} mode={lossMode} onModeChange={setLossMode} />
+        <CoreLossPanel
+          train={core.trainLoss}
+          val={core.valLoss}
+          series={coreSeries}
+          onRangeChange={updateRange}
+          mode={lossMode}
+          onModeChange={setLossMode}
+          yMin={yRangeInvalid ? null : yMin}
+          yMax={yRangeInvalid ? null : yMax}
+          yMinText={yMinText}
+          yMaxText={yMaxText}
+          onYMinChange={setYMinText}
+          onYMaxChange={setYMaxText}
+          yRangeInvalid={yRangeInvalid}
+        />
         <CoreValidationPanel metric={core.primary} series={coreSeries} onRangeChange={updateRange} />
       </div>
 
@@ -388,6 +409,13 @@ function CoreLossPanel({
   onRangeChange,
   mode,
   onModeChange,
+  yMin,
+  yMax,
+  yMinText,
+  yMaxText,
+  onYMinChange,
+  onYMaxChange,
+  yRangeInvalid,
 }: {
   train?: MetricCatalogItem;
   val?: MetricCatalogItem;
@@ -395,6 +423,13 @@ function CoreLossPanel({
   onRangeChange: (range: { min: number; max: number } | null) => void;
   mode: "full" | "late" | "log";
   onModeChange: (mode: "full" | "late" | "log") => void;
+  yMin: number | null;
+  yMax: number | null;
+  yMinText: string;
+  yMaxText: string;
+  onYMinChange: (value: string) => void;
+  onYMaxChange: (value: string) => void;
+  yRangeInvalid: boolean;
 }) {
   const lines: ChartLine[] = [];
   const trainPayload = train ? series.get(train.raw_key) : undefined;
@@ -449,6 +484,11 @@ function CoreLossPanel({
         <h3>{valPayload ? "Train / Validation Loss" : "Train Loss"}</h3>
         <LossModeSwitch mode={mode} onChange={onModeChange} />
       </div>
+      <div className="loss-y-controls">
+        <label>Y 最小 <input value={yMinText} onChange={(event) => onYMinChange(event.target.value)} inputMode="decimal" placeholder="自动" /></label>
+        <label>Y 最大 <input value={yMaxText} onChange={(event) => onYMaxChange(event.target.value)} inputMode="decimal" placeholder="自动" /></label>
+        {yRangeInvalid ? <span className="muted small">最小值必须小于最大值</span> : null}
+      </div>
       <MetricChart
         title="Loss"
         lines={lines}
@@ -457,6 +497,8 @@ function CoreLossPanel({
         smoothingWindow={5}
         logScale={mode === "log"}
         showRaw={false}
+        yMin={yMin}
+        yMax={yMax}
         height={330}
         group={`run-core-${train?.raw_key ?? val?.raw_key ?? "loss"}`}
         onRangeChange={onRangeChange}

@@ -31,4 +31,4 @@
 
 - E2E：六项摘要、默认无指标 chips、打开抽屉、搜索、添加自定义图。
 - `e2e:live`：imported JSONL 无心跳追加后摘要 Train Loss 自动从 1 更新到 0.8。
-- 截图：[workspace-1440x900.png](../images/workspace-1440x900.png)、[workspace-1366x768.png](../images/workspace-1366x768.png)、[metric-browser.png](../images/metric-browser.png)、[metric-evaluation.png](../images/metric-evaluation.png)。
+- 截图：[workspace-1440x900.png](../images/workspace-1440x900.png)、[workspace-1366x768.png](../images/workspace-1366x768.png)、[loss-full.png](../images/loss-full.png)、[loss-late.png](../images/loss-late.png)、[loss-log.png](../images/loss-log.png)、[metric-browser.png](../images/metric-browser.png)、[metric-evaluation.png](../images/metric-evaluation.png)。

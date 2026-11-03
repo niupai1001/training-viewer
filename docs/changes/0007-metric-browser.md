@@ -53,9 +53,9 @@ npm run e2e:live
 
 ## 未完成 / 风险
 
-- 训练时长仍是指标首末跨度，不是生命周期累计；`RunMonitoringSummary` 未实现。
-- Loss 全程/后期/对数轻量切换已接入；自定义 Y 范围、迷你全程概览未实现。
-- TLVP 1.1 四要素、Schema、Writer/Validator 尚未在本轮升级。
+- 训练时长后来由 `RunMonitoringSummary` 补上；见 0008。
+- Loss 全程/后期/对数已接入，并支持显式 Y 最小/最大值；自定义 Y 输入当前只作用于 Loss 图。
+- TLVP 1.1 四要素、Schema、Writer/Validator 后来由 0008 补上。
 - 自定义视图在 localStorage，不是服务端用户状态库；换浏览器会丢失。
 - 单点评估热力图、用户指标定义编辑、10k 指标虚拟化未做。
 - 1000 指标 API 响应 46 KB/40 项为本机样本；不是通用性能承诺。
