@@ -1054,6 +1054,12 @@ function App() {
                 <p className="muted">
                   {run.meta.variant.description || "基线方案"} ·{" "}
                   {new Date(run.meta.created_at).toLocaleString("zh-CN")}
+                  {view && summary[view.charts[0]]?.latest && (
+                    <> · Step {summary[view.charts[0]].latest!.step}
+                      {summary[view.charts[0]].latest!.epoch != null &&
+                        ` · Epoch ${fmt(summary[view.charts[0]].latest!.epoch)}`}
+                    </>
+                  )}
                 </p>
               </header>
               <div className="section-heading">
