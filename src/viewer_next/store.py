@@ -16,7 +16,7 @@ class Store:
         self.db = sqlite3.connect(self.directory / 'index.sqlite3', check_same_thread=False)
         self.state = sqlite3.connect(self.directory / 'settings.sqlite3', check_same_thread=False)
         self.db.row_factory = sqlite3.Row
-        self.db.executescript('''PRAGMA journal_mode=WAL;
+        self.db.executescript('''PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA wal_autocheckpoint=10000;
           CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY,path TEXT,meta TEXT,revision INTEGER DEFAULT 0);
           CREATE TABLE IF NOT EXISTS cursors(path TEXT PRIMARY KEY,offset INTEGER,signature TEXT);
           CREATE TABLE IF NOT EXISTS points(run TEXT,key TEXT,session TEXT,step INTEGER,epoch REAL,time REAL,seq INTEGER,value REAL,PRIMARY KEY(run,key,session,step));
@@ -134,8 +134,11 @@ class Store:
                     self.db.execute('UPDATE runs SET revision=revision+1 WHERE id=?', (rid,))
                     # Restart both streams after a reset, inside the same transaction.
                     return self.ingest(path)
+                if cursor and stat.st_size == offset:
+                    continue
                 changed = False
                 batch_count = 0
+                session_steps = dict(self.db.execute('SELECT session,MAX(step) FROM points WHERE run=? GROUP BY session', (rid,)))
                 with file.open('rb') as stream:
                     stream.seek(offset)
                     while not self.stop.is_set():
@@ -163,10 +166,12 @@ class Store:
                                 values = r['values']
                                 if not values or any(k not in meta['metrics'] or isinstance(v,bool) or not isinstance(v,(float,int)) or not math.isfinite(v) for k,v in values.items()):
                                     raise ValueError('指标必须已定义且为有限数值')
-                                previous = self.db.execute('SELECT MAX(step) FROM points WHERE run=? AND session=?', (rid,session)).fetchone()[0]
+                                previous = session_steps.get(session)
                                 if previous is not None and step < previous:
                                     raise ValueError('同一训练阶段内 step 不可回退')
                                 self.db.executemany('''INSERT INTO points VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(run,key,session,step) DO UPDATE SET epoch=excluded.epoch,time=excluded.time,seq=excluded.seq,value=excluded.value WHERE excluded.seq>points.seq''', [(rid,k,session,step,epoch,ts,seq,v) for k,v in values.items()])
+                            if name == 'metrics.jsonl':
+                                session_steps[session] = step
                             changed = True
                             batch_count += 1
                             if batch_count % 2048 == 0:
