@@ -1,0 +1,505 @@
+:root {
+  font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: #202939;
+  background: #f6f7f9;
+  font-size: 14px;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+  border: 1px solid #dfe3ec;
+  background: #fff;
+  border-radius: 7px;
+  padding: 7px 12px;
+  color: inherit;
+}
+button:hover {
+  background: #f0f2f7;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid #596bdb;
+  outline-offset: 2px;
+}
+input,
+select {
+  border: 1px solid #dfe3ec;
+  border-radius: 6px;
+  padding: 9px;
+  background: white;
+  max-width: 100%;
+}
+input:not([type="checkbox"]) {
+  width: 100%;
+  min-width: 0;
+}
+input[type="checkbox"] {
+  accent-color: #5062d9;
+}
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+h1 {
+  font-size: 25px;
+  font-weight: 650;
+}
+h2 {
+  font-size: 16px;
+}
+h3 {
+  font-size: 14px;
+}
+small {
+  display: block;
+  color: #8a93a4;
+  font-size: 11px;
+  margin-top: 5px;
+}
+.muted {
+  color: #7a8496;
+  line-height: 1.7;
+}
+.primary {
+  background: #5062d9;
+  color: white;
+  border-color: #5062d9;
+}
+.primary:hover {
+  background: #4253c2;
+}
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+.sidebar {
+  width: 246px;
+  background: #fff;
+  border-right: 1px solid #e8eaf0;
+  padding: 26px 18px;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  inset: 0 auto 0 0;
+}
+.brand {
+  font-size: 16px;
+  font-weight: 650;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 28px;
+}
+.brand-icon {
+  background: #5062d9;
+  color: white;
+  border-radius: 7px;
+  font-size: 22px;
+  width: 30px;
+  text-align: center;
+}
+.add {
+  width: 100%;
+  margin-bottom: 28px;
+}
+.nav-title {
+  color: #959daf;
+  font-size: 11px;
+  margin-bottom: 16px;
+}
+nav {
+  flex: 1;
+  overflow: auto;
+}
+nav section {
+  margin-bottom: 24px;
+}
+nav h3 {
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+nav h4 {
+  font-size: 12px;
+  font-weight: 500;
+  color: #667085;
+  margin: 10px 0 5px 10px;
+}
+.run-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  padding: 9px 12px;
+  color: #667085;
+  font-size: 12px;
+  text-align: left;
+}
+.run-link.selected {
+  background: #edf0ff;
+  color: #4355ca;
+}
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a8afbd;
+}
+.dot.running {
+  background: #32a77a;
+}
+.dot.completed {
+  background: #687adc;
+}
+.settings {
+  margin-top: 20px;
+  color: #7a8496;
+  border: 0;
+  text-align: left;
+}
+main {
+  margin-left: 246px;
+  padding: 0 36px 28px;
+  width: calc(100% - 246px);
+}
+.topline {
+  height: 66px;
+  border-bottom: 1px solid #e7eaf0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #667085;
+  margin-bottom: 28px;
+}
+.run-header {
+  margin-bottom: 28px;
+}
+.eyebrow {
+  color: #7d8799;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.run-header .muted {
+  margin-top: 10px;
+}
+.inline {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.inline > label {
+  flex: 1;
+}
+.status {
+  font-size: 11px;
+  border-radius: 20px;
+  padding: 4px 10px;
+  background: #eceff6;
+  color: #657083;
+}
+.status.running {
+  background: #e6f5ee;
+  color: #278260;
+}
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.section-heading button {
+  font-size: 12px;
+  background: transparent;
+  border: 0;
+  color: #6c7890;
+}
+.charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.chart-card {
+  background: #fff;
+  border: 1px solid #e5e8ef;
+  border-radius: 12px;
+  padding: 19px 18px 10px;
+  min-width: 0;
+}
+.chart-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+.chart-card header button {
+  border: 0;
+  padding: 0 8px;
+}
+.chart-card header h3 {
+  margin-bottom: 8px;
+}
+.chart-card header .muted {
+  font-size: 12px;
+}
+.chart-card b {
+  color: #323d55;
+  font-weight: 600;
+}
+.segmented {
+  display: flex;
+  background: #f2f4f8;
+  padding: 3px;
+  border-radius: 7px;
+  width: fit-content;
+  gap: 2px;
+}
+.segmented button {
+  background: transparent;
+  border: 0;
+  font-size: 12px;
+  padding: 5px 9px;
+  color: #7a8496;
+}
+.segmented .active {
+  background: white;
+  color: #39466b;
+  box-shadow: 0 1px 4px #0000000d;
+}
+.chart-tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.chart-tools > button {
+  font-size: 11px;
+}
+.plot {
+  height: 255px;
+}
+.thumbnail {
+  height: 45px;
+}
+.chart-card footer {
+  font-size: 10px;
+  color: #959daf;
+  min-height: 22px;
+  padding-top: 5px;
+}
+.chart-menu {
+  background: #f8f9fc;
+  padding: 12px;
+  border-radius: 6px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.chart-menu input:not([type="checkbox"]) {
+  width: 90px;
+}
+.chart-menu .inline {
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.chart-menu button {
+  font-size: 11px;
+}
+.expanded {
+  position: fixed;
+  inset: 24px;
+  z-index: 20;
+  overflow: auto;
+  box-shadow: 0 0 0 60px #26314c77;
+}
+.expanded .plot {
+  height: calc(100vh - 290px);
+}
+.numbers {
+  display: flex;
+  gap: 28px;
+  color: #7b8597;
+  font-size: 12px;
+  margin: 22px 4px;
+  flex-wrap: wrap;
+}
+.numbers b {
+  color: #3c465b;
+  margin-left: 6px;
+}
+.config {
+  border-top: 1px solid #e5e8ef;
+  padding-top: 20px;
+  color: #7a8496;
+  font-size: 12px;
+}
+.config p {
+  margin: 12px 0;
+}
+.config summary {
+  cursor: pointer;
+}
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: #1e293b66;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 30;
+  padding: 30px;
+}
+.dialog {
+  background: white;
+  border-radius: 14px;
+  padding: 26px;
+  width: 640px;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 20px 80px #17233c33;
+}
+.dialog header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.dialog > label,
+.dialog > .inline,
+.dialog > .segmented,
+.dialog > p,
+.dialog > button,
+.dialog > input {
+  margin-bottom: 16px;
+}
+.dialog label {
+  display: block;
+  font-size: 12px;
+  color: #667085;
+}
+.dialog label input,
+.dialog label select,
+.dialog label .inline {
+  margin-top: 7px;
+}
+.dialog label input[type="checkbox"] {
+  margin-top: 0;
+}
+.preview {
+  max-height: 200px;
+  overflow: auto;
+  font-size: 12px;
+}
+.preview p {
+  padding: 8px 0;
+}
+pre {
+  background: #f5f6fa;
+  padding: 16px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.7;
+  color: #536079;
+}
+.error {
+  color: #b54343;
+  background: #fff0ef;
+  padding: 10px;
+  border-radius: 5px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  margin: 10px 0;
+}
+.metric-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-top: 1px solid #edf0f4;
+  padding: 14px 0;
+}
+.metric-row > div {
+  flex: 1;
+}
+.metric-row label {
+  white-space: nowrap;
+}
+.metric-row small {
+  overflow-wrap: anywhere;
+}
+.empty {
+  text-align: center;
+  padding: 100px 0;
+  color: #67738a;
+}
+.empty h1 {
+  color: #323c51;
+  margin: 18px;
+}
+.empty p {
+  margin-bottom: 24px;
+}
+.empty-icon {
+  font-size: 40px;
+  color: #596bd7;
+}
+.settings-panel {
+  background: white;
+  border: 1px solid #e5e8ef;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+.settings-panel .inline {
+  margin: 12px 0;
+  justify-content: space-between;
+}
+.settings-panel code {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+@media (max-width: 1100px) {
+  .sidebar {
+    width: 210px;
+  }
+  main {
+    margin-left: 210px;
+    width: calc(100% - 210px);
+    padding: 0 22px 24px;
+  }
+  .chart-card {
+    padding: 14px 10px;
+  }
+  .plot {
+    height: 235px;
+  }
+}
+@media (max-width: 900px) {
+  .charts {
+    grid-template-columns: 1fr;
+  }
+}
+
+.inline > button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
