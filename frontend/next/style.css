@@ -503,3 +503,27 @@ pre {
   flex-shrink: 0;
   white-space: nowrap;
 }
+
+.folder-picker {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+  color: #667085;
+  font-size: 12px;
+}
+.folder-picker select { width: 100%; text-overflow: ellipsis; }
+.run-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 18px;
+}
+.run-overview > div {
+  background: white;
+  border: 1px solid #e5e8ef;
+  border-radius: 9px;
+  padding: 10px 13px;
+  overflow-wrap: anywhere;
+}
+.run-overview dt { color: #667085; font-size: 12px; }
+.run-overview dd { margin: 4px 0 0; font-size: 16px; font-weight: 600; }

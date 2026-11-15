@@ -1,4 +1,5 @@
 import hashlib
+import filecmp
 import json
 import math
 import sqlite3
@@ -18,6 +19,7 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.executescript('''PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA wal_autocheckpoint=10000;
           CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY,path TEXT,meta TEXT,revision INTEGER DEFAULT 0);
+          CREATE TABLE IF NOT EXISTS run_copies(path TEXT PRIMARY KEY,run TEXT NOT NULL);
           CREATE TABLE IF NOT EXISTS cursors(path TEXT PRIMARY KEY,offset INTEGER,signature TEXT);
           CREATE TABLE IF NOT EXISTS points(run TEXT,key TEXT,session TEXT,step INTEGER,epoch REAL,time REAL,seq INTEGER,value REAL,PRIMARY KEY(run,key,session,step));
           CREATE INDEX IF NOT EXISTS point_range ON points(run,key,session,step);
@@ -32,13 +34,14 @@ class Store:
           CREATE TABLE IF NOT EXISTS issues(path TEXT,message TEXT,UNIQUE(path,message));
         ''')
         self.state.executescript('CREATE TABLE IF NOT EXISTS roots(path TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);')
+        self.db.create_function('in_root', 2, lambda path, root: Path(path).is_relative_to(root))
         self.curve_cache = {}
         self.stop = threading.Event()
         self.progress = {'scanning': False, 'found': 0}
 
     def roots(self):
         with self.lock:
-            return [r[0] for r in self.state.execute('SELECT path FROM roots')]
+            return [r[0] for r in self.state.execute('SELECT path FROM roots ORDER BY rowid')]
 
     def add(self, path):
         path = Path(path).resolve()
@@ -48,12 +51,29 @@ class Store:
         next(path.iterdir(), None)
         with self.lock, self.state:
             self.state.execute('INSERT OR IGNORE INTO roots VALUES(?)', (str(path),))
+            self._save_active_root(str(path))
         return str(path)
+
+    def active_root(self):
+        with self.lock:
+            roots = self.roots()
+            active = self.setting('active_root')
+            return active if active in roots else roots[-1] if roots else None
+
+    def select_root(self, path):
+        with self.lock, self.state:
+            if path not in self.roots():
+                raise ValueError('该目录尚未加入监视')
+            self._save_active_root(path)
+
+    def _save_active_root(self, path):
+        self.state.execute('INSERT OR REPLACE INTO settings VALUES(?,?)',
+                           ('active_root', json.dumps(path)))
 
     def remove(self, path):
         with self.lock, self.state:
             self.state.execute('DELETE FROM roots WHERE path=?', (path,))
-        # Existing indexed records remain visible; source files are untouched.
+            self._save_active_root(self.active_root())
 
     def setting(self, key, value=None, write=False):
         with self.lock:
@@ -97,6 +117,7 @@ class Store:
         rid = meta['run_id']
         encoded = json.dumps(meta, sort_keys=True, ensure_ascii=False)
         with self.lock, self.db:
+            self.db.execute('DELETE FROM run_copies WHERE path=? AND run<>?', (str(path), rid))
             old = self.db.execute('SELECT * FROM runs WHERE id=?', (rid,)).fetchone()
             if old and old['path'] != str(path):
                 original = Path(old['path'])
@@ -104,9 +125,15 @@ class Store:
                     same = old['meta'] == encoded
                     for name in ('metrics.jsonl', 'events.jsonl'):
                         a, b = original.parent / name, path.parent / name
-                        same = same and (a.read_bytes() if a.exists() else b'') == (b.read_bytes() if b.exists() else b'')
+                        same = same and (
+                            filecmp.cmp(a, b, shallow=False) if a.exists() and b.exists()
+                            else not a.exists() and not b.exists()
+                        )
                     if not same:
-                        raise ValueError('Run ID 冲突：不同内容不能合并')
+                        self.db.execute('DELETE FROM run_copies WHERE path=?', (str(path),))
+                        self.issue(path, 'Run ID 冲突：不同内容不能合并')
+                        return
+                    self.db.execute('INSERT OR REPLACE INTO run_copies VALUES(?,?)', (str(path), rid))
                     return
             self.db.execute('INSERT INTO runs(id,path,meta) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET path=excluded.path,meta=excluded.meta', (rid, str(path), encoded))
             for name in ('metrics.jsonl', 'events.jsonl'):
@@ -195,10 +222,44 @@ class Store:
                 if changed:
                     self.db.execute('UPDATE runs SET revision=revision+1 WHERE id=?', (rid,))
 
-    def runs(self, limit=50, offset=0):
+    def runs(self, limit=50, offset=0, *, current_folder=False):
         with self.lock:
-            rows = self.db.execute('SELECT * FROM runs ORDER BY json_extract(meta,\'$.created_at\') DESC LIMIT ? OFFSET ?', (limit,offset)).fetchall()
+            where, params = '', []
+            if current_folder:
+                root = self.active_root()
+                if root is None:
+                    return []
+                where = ('WHERE in_root(path, ?) OR EXISTS (SELECT 1 FROM run_copies '
+                         'WHERE run=runs.id AND in_root(run_copies.path, ?))')
+                params = [root, root]
+            rows = self.db.execute(
+                f"SELECT id FROM runs {where} ORDER BY json_extract(meta,'$.created_at') DESC, id LIMIT ? OFFSET ?",
+                [*params, limit, offset],
+            ).fetchall()
             return [self.detail(row['id']) for row in rows]
+
+    def training_seconds(self, rid):
+        with self.lock:
+            sessions = self.db.execute(
+                """SELECT session,
+                     MIN(CASE WHEN kind IN ('started','resumed') THEN time END) AS started,
+                     MAX(CASE WHEN kind IN ('completed','failed') THEN time END) AS finished,
+                     MAX(time) AS activity
+                   FROM events WHERE run=? GROUP BY session""", (rid,)
+            ).fetchall()
+            durations = []
+            for session in sessions:
+                if session['started'] is None:
+                    continue
+                end = session['finished']
+                if end is None:
+                    point = self.db.execute(
+                        'SELECT MAX(time) FROM points WHERE run=? AND session=?',
+                        (rid, session['session']),
+                    ).fetchone()[0]
+                    end = max(session['activity'], point if point is not None else session['started'])
+                durations.append(max(0, end - session['started']))
+            return sum(durations) if durations else None
 
     def detail(self, rid):
         with self.lock:

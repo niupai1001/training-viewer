@@ -94,6 +94,39 @@ const status: Record<string, string> = {
   unknown: "等待数据",
 };
 
+function duration(seconds: number | null) {
+  if (seconds == null) return "未记录";
+  if (seconds > 0 && seconds < 1) return "不足 1 秒";
+  const total = Math.floor(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor(total / 60) % 60;
+  return [hours ? hours + " 小时" : "", minutes ? minutes + " 分钟" : "",
+    total % 60 + " 秒"].filter(Boolean).join(" ");
+}
+
+function RunOverview({ run, summary, seconds }: { run: Run; summary: Summary; seconds: number | null }) {
+  const metrics = run.meta.metrics;
+  const orderedKeys = Array.from(new Set([run.meta.view.primary_metric, ...run.meta.view.charts, ...Object.keys(metrics)]));
+  const accuracy = orderedKeys.find((key) => /(?:^|[^a-z])(?:accuracy|acc|top[_-]?1)(?:[^a-z]|$)|准确率/.test((key + " " + metrics[key].label).toLowerCase()));
+  const score = accuracy || orderedKeys.find((key) => metrics[key].role === "score");
+  const loss = orderedKeys.find((key) => metrics[key].role === "loss");
+  function display(key: string | undefined) {
+    if (!key || !summary[key]?.latest) return "未记录";
+    const { unit } = metrics[key];
+    return fmt(summary[key].latest.value, unit) + (unit === "%" ? "%" : unit && !["1", "ratio"].includes(unit) ? " " + unit : "");
+  }
+  return (
+    <dl className="run-overview" aria-label="训练摘要">
+      <div><dt>{accuracy ? "精度" : "精度 / 评估指标"}</dt><dd>{display(score)}</dd>
+        {score && <small>{metrics[score].label}</small>}</div>
+      <div><dt>损失</dt><dd>{display(loss)}</dd>
+        {loss && <small>{metrics[loss].label}</small>}</div>
+      <div><dt>训练时长</dt><dd>{duration(seconds)}</dd>
+        <small>{run.status === "running" || run.status === "interrupted" ? "截至最近记录" : "各训练阶段累计"}</small></div>
+    </dl>
+  );
+}
+
 function Chart({
   run,
   metric,
@@ -512,7 +545,7 @@ function Chart({
   );
 }
 
-function AddExperiment({ close }: { close: () => void }) {
+function AddExperiment({ close, onAdded }: { close: () => void; onAdded: () => void }) {
   const [tab, setTab] = useState("existing"),
     [path, setPath] = useState(""),
     [preview, setPreview] = useState<any>(null),
@@ -522,10 +555,10 @@ function AddExperiment({ close }: { close: () => void }) {
     [variant, setVariant] = useState("基线"),
     [kind, setKind] = useState("baseline"),
     [description, setDescription] = useState("");
-  const [metric, setMetric] = useState("train/objective"),
-    [label, setLabel] = useState("训练目标"),
-    [direction, setDirection] = useState("min"),
-    [role, setRole] = useState("loss");
+  const [metric, setMetric] = useState("validation/accuracy"),
+    [label, setLabel] = useState("验证准确率"),
+    [unit, setUnit] = useState("ratio"),
+    [direction, setDirection] = useState("max");
   const alive = useRef(true);
   useEffect(
     () => () => {
@@ -562,6 +595,7 @@ function AddExperiment({ close }: { close: () => void }) {
   async function confirm() {
     try {
       await api("roots", "POST", { path });
+      onAdded();
       close();
     } catch (e) {
       setError(String(e));
@@ -569,14 +603,15 @@ function AddExperiment({ close }: { close: () => void }) {
   }
   async function generate() {
     try {
+      const score = metric.trim();
+      const loss = "train/loss";
       if (
         !name.trim() ||
         !variant.trim() ||
-        !metric.trim() ||
+        (score && (!label.trim() || score === loss)) ||
         (kind !== "baseline" && !description.trim())
       )
         throw Error("请填写实验、方案、指标和改动说明");
-      await api("roots", "POST", { path });
       const identityKey = "identity." + name.trim();
       const id =
         (await api("settings/" + encodeURIComponent(identityKey))) ||
@@ -594,18 +629,23 @@ function AddExperiment({ close }: { close: () => void }) {
       const metadata = {
         experiment: { id, name: name.trim() },
         variant: { id: variantId, name: variant.trim(), kind, description },
-        metrics: { [metric]: { label, unit: "1", direction, role } },
-        charts: [metric],
-        primary_metric: metric,
+        metrics: {
+          [loss]: { label: "训练损失", unit: "1", direction: "min", role: "loss" },
+          ...(score ? { [score]: { label: label.trim(), unit, direction, role: "score" } } : {}),
+        },
+        charts: score ? [loss, score] : [loss],
+        primary_metric: score || loss,
       };
+      await api("roots", "POST", { path });
+      onAdded();
       setCode(
         "from pathlib import Path\nfrom uuid import uuid4\nfrom tvlp_writer import RunWriter\n\nsettings = " +
           JSON.stringify(metadata, null, 2) +
           "\noutput = Path(" +
           JSON.stringify(path) +
-          ") / uuid4().hex\nwith RunWriter(output, **settings) as writer:\n    # 在你的训练循环中调用；step 使用实际训练进度\n    writer.log(step=1, values={" +
-          JSON.stringify(metric) +
-          ": 0.42})\n",
+          ") / uuid4().hex\nwith RunWriter(output, **settings) as writer:\n    # 在训练循环中记录实际 step 和损失：\n    # writer.log(step, {\"train/loss\": float(training_loss)})\n" +
+          (score ? "    # 验证完成时，记录同一进度的实际评估值：\n    # writer.log(step, {" + JSON.stringify(score) + ": float(validation_score)})\n" : "") +
+          "    pass  # 在这里运行你的训练循环\n",
       );
     } catch (e) {
       setError(String(e));
@@ -678,7 +718,7 @@ function AddExperiment({ close }: { close: () => void }) {
                 {preview.done && (
                   <button className="primary" onClick={confirm}>
                     {preview.items.length
-                      ? "添加并监视目录"
+                      ? "添加并切换到此目录"
                       : "监视目录，等待训练写入"}
                   </button>
                 )}
@@ -727,7 +767,7 @@ function AddExperiment({ close }: { close: () => void }) {
                 </label>
                 <div className="inline">
                   <label>
-                    核心指标键
+                    评估指标键（可留空）
                     <input
                       value={metric}
                       onChange={(e) => setMetric(e.target.value)}
@@ -742,21 +782,15 @@ function AddExperiment({ close }: { close: () => void }) {
                   </label>
                 </div>
                 <div className="inline">
-                  <select
-                    value={direction}
-                    onChange={(e) => setDirection(e.target.value)}
-                  >
+                  <select aria-label="评估指标方向" value={direction} onChange={(e) => setDirection(e.target.value)}>
                     <option value="min">越低越好</option>
                     <option value="max">越高越好</option>
                     <option value="none">无优化方向</option>
                   </select>
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                  >
-                    <option value="loss">损失趋势</option>
-                    <option value="score">评估得分</option>
-                    <option value="other">其他</option>
+                  <select aria-label="评估指标单位" value={unit} onChange={(e) => setUnit(e.target.value)}>
+                    <option value="ratio">比例（0–1，显示为百分比）</option>
+                    <option value="%">百分值（0–100）</option>
+                    <option value="1">普通数值</option>
                   </select>
                 </div>
                 <button className="primary" disabled={!path} onClick={generate}>
@@ -798,17 +832,42 @@ function App() {
   const [runs, setRuns] = useState<Run[]>([]),
     [selected, setSelected] = useState(""),
     [limit, setLimit] = useState(50),
-    [summary, setSummary] = useState<Summary>({}),
+    [overview, setOverview] = useState<{ id: string; summary: Summary; seconds: number | null } | null>(null),
     [view, setView] = useState<View | null>(null),
     [add, setAdd] = useState(false),
     [drawer, setDrawer] = useState(false),
     [search, setSearch] = useState(""),
     [error, setError] = useState(""),
     [roots, setRoots] = useState<string[]>([]),
+    [folderChange, setFolderChange] = useState(0),
     [health, setHealth] = useState<any>(null),
     [settings, setSettings] = useState(false);
   const run = runs.find((r) => r.meta.run_id === selected);
+  const summary = overview?.id === selected ? overview.summary : {};
   const initialized = useRef(false);
+  function refreshFolder() {
+    setRuns([]);
+    setSelected("");
+    setDrawer(false);
+    setLimit(50);
+    setFolderChange((value) => value + 1);
+  }
+  async function selectFolder(path: string) {
+    try {
+      await api("roots/active", "PUT", { path });
+      refreshFolder();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+  async function removeFolder(path: string) {
+    try {
+      await api("roots", "DELETE", { path });
+      refreshFolder();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
   useEffect(() => {
     let live = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -833,7 +892,9 @@ function App() {
               "",
           );
           initialized.current = true;
-        } else setSelected((current) => current || items[0]?.meta.run_id || "");
+        } else setSelected((current) =>
+          items.some((item: Run) => item.meta.run_id === current) ? current : items[0]?.meta.run_id || "",
+        );
       } catch (e) {
         if (live) setError(String(e));
       }
@@ -844,7 +905,7 @@ function App() {
       live = false;
       clearTimeout(timer);
     };
-  }, [limit]);
+  }, [limit, folderChange]);
   useEffect(() => {
     if (selected)
       api("settings/workspace", "PUT", { value: selected }).catch(() => {});
@@ -852,10 +913,10 @@ function App() {
   useEffect(() => {
     let live = true;
     if (run) {
-      setSummary({});
-      api("runs/" + selected + "/summary")
-        .then((s) => {
-          if (live) setSummary(s);
+      const path = "runs/" + encodeURIComponent(selected);
+      Promise.all([api(path + "/summary"), api(path)])
+        .then(([summary, detail]) => {
+          if (live) setOverview({ id: selected, summary, seconds: detail.training_seconds });
         })
         .catch((e) => {
           if (live) setError(String(e));
@@ -937,6 +998,14 @@ function App() {
           <button className="primary add" onClick={() => setAdd(true)}>
             ＋ 添加实验
           </button>
+          {roots.length > 0 && (
+            <label className="folder-picker">
+              当前目录
+              <select value={health?.active_root ?? ""} onChange={(e) => selectFolder(e.target.value)}>
+                {roots.map((path) => <option key={path} value={path} title={path}>{path}</option>)}
+              </select>
+            </label>
+          )}
           <div className="nav-title">实验</div>
           <nav>
             {experiments.map((id) => {
@@ -1008,19 +1077,13 @@ function App() {
               {roots.map((p) => (
                 <div className="inline" key={p}>
                   <code>{p}</code>
-                  <button
-                    onClick={() =>
-                      api("roots", "DELETE", { path: p }).then(() =>
-                        setRoots(roots.filter((x) => x !== p)),
-                      )
-                    }
-                  >
+                  <button onClick={() => removeFolder(p)}>
                     移除监视
                   </button>
                 </div>
               ))}
               <p className="muted">
-                移除监视不会删除训练日志。目录移动后可重新添加。
+                实验列表显示当前目录。移除监视后，可重新添加该目录查看日志。
               </p>
               <details>
                 <summary>读取问题 {health?.issues.length || 0}</summary>
@@ -1062,6 +1125,8 @@ function App() {
                   )}
                 </p>
               </header>
+              <RunOverview run={run} summary={summary}
+                seconds={overview?.id === selected ? overview.seconds : null} />
               <div className="section-heading">
                 <h2>核心指标</h2>
                 <button onClick={() => setDrawer(true)}>
@@ -1105,7 +1170,7 @@ function App() {
           )}
         </main>
       </div>
-      {add && <AddExperiment close={() => setAdd(false)} />}{" "}
+      {add && <AddExperiment close={() => setAdd(false)} onAdded={refreshFolder} />}{" "}
       {drawer && run && view && (
         <div className="backdrop" onClick={() => setDrawer(false)}>
           <section

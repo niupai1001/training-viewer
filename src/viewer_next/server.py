@@ -46,7 +46,8 @@ def create_app(directory, token=None):
     def health():
         with store.lock:
             issues = [dict(r) for r in store.db.execute('SELECT * FROM issues LIMIT 100')]
-        return dict(application='training-viewer-next',progress=store.progress,issues=issues)
+        return dict(application='training-viewer-next',progress=store.progress,issues=issues,
+                    active_root=store.active_root())
 
     @app.get('/api/v2/roots')
     def roots():
@@ -85,6 +86,11 @@ def create_app(directory, token=None):
     def add(body: dict):
         return dict(path=store.add(body['path']))
 
+    @app.put('/api/v2/roots/active')
+    def select_root(body: dict):
+        store.select_root(body['path'])
+        return dict(path=body['path'])
+
     @app.delete('/api/v2/roots')
     def remove(body: dict):
         store.remove(body['path'])
@@ -92,12 +98,12 @@ def create_app(directory, token=None):
 
     @app.get('/api/v2/runs')
     def runs(limit: int=50, offset: int=0):
-        return store.runs(max(1,min(100,limit)),max(0,offset))
+        return store.runs(max(1,min(100,limit)),max(0,offset),current_folder=True)
 
     @app.get('/api/v2/runs/{rid}')
     def detail(rid: str):
         try:
-            return store.detail(rid)
+            return {**store.detail(rid), 'training_seconds': store.training_seconds(rid)}
         except KeyError:
             raise HTTPException(404,'训练记录不存在')
 

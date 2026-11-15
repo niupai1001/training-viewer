@@ -43,8 +43,12 @@ or generate integration code for a new training. Save `tvlp_writer.py` beside th
 script. Replace the demonstration log call with calls in the real training loop.
 Logging does not contact the desktop service. Closing the desktop does not stop training.
 
-Monitoring a parent directory discovers future runs automatically. Unmonitoring leaves
-logs and the existing index untouched. Indexed history currently depends on the original
+Monitoring a parent directory discovers future runs automatically. Adding a directory
+opens its experiments. Use the current-folder selector to switch between monitored
+folders. Unmonitoring hides the folder and preserves its original logs and cached index.
+The run summary shows the latest loss and accuracy (or the named evaluation metric)
+when recorded. Training time adds each session from its start to its finish or latest
+recorded activity, excluding time between sessions. Indexed history depends on the original
 files; an independent historical snapshot library is not included in this release.
 
 Loss charts default to the latest 20% of the current session. The thumbnail shows the

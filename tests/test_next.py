@@ -94,3 +94,49 @@ def test_reopen_and_constant_series(tmp_path):
     assert curve['y_min']==curve['y_max']==0
     assert 1<=len(curve['points'])<=20
     s.close()
+
+
+def test_folder_switch_and_removal_keep_sources(tmp_path):
+    first = tmp_path / 'runs'
+    second = tmp_path / 'runs-new'
+    for path in (first, second):
+        with writer(path) as w:
+            w.log(1, {'objective': 1})
+    app = create_app(tmp_path / 'state', 'secret')
+    store = app.state.store
+    store.scan([first, second])
+    with TestClient(app, base_url='http://127.0.0.1', headers={'x-viewer-token': 'secret'}) as client:
+        def visible_sources():
+            return [r['source'] for r in client.get('/api/v2/runs').json()]
+
+        assert visible_sources() == []
+        assert client.post('/api/v2/roots', json={'path': str(first)}).status_code == 200
+        assert visible_sources() == [str(first)]
+        assert client.post('/api/v2/roots', json={'path': str(second)}).status_code == 200
+        assert visible_sources() == [str(second)]
+        assert client.put('/api/v2/roots/active', json={'path': str(first)}).status_code == 200
+        assert visible_sources() == [str(first)]
+        assert client.request('DELETE', '/api/v2/roots', json={'path': str(first)}).status_code == 200
+        assert visible_sources() == [str(second)]
+        assert (first / 'metrics.jsonl').is_file()
+
+
+def test_training_duration_excludes_gap_between_sessions(tmp_path):
+    source = tmp_path / 'run'
+    with writer(source) as w:
+        rid = w.meta['run_id']
+    events = [
+        ('a', 'started', 0), ('a', 'completed', 12),
+        ('b', 'resumed', 40), ('b', 'heartbeat', 45),
+    ]
+    records = [
+        dict(seq=i, session_id=session, kind=kind, time=f'2026-11-09T10:00:{seconds:02}Z')
+        for i, (session, kind, seconds) in enumerate(events, 1)
+    ]
+    (source / 'events.jsonl').write_text(''.join(json.dumps(record) + '\n' for record in records))
+    metrics = dict(seq=5, session_id='b', step=1, time='2026-11-09T10:00:49Z', values={'objective': 1})
+    (source / 'metrics.jsonl').write_text(json.dumps(metrics) + '\n')
+    store = Store(tmp_path / 'state')
+    store.scan([source])
+    assert store.training_seconds(rid) == 21
+    store.close()
